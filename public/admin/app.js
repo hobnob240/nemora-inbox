@@ -3,8 +3,8 @@ const $ = s => document.querySelector(s);
 const view = $('#view'), tabsEl = $('#tabs'), toastEl = $('#toast');
 const PKG = { starter: 'Starter', business: 'Business', premium: 'Premium', bigger: 'Something bigger', '': 'Not sure yet' };
 const STATUS = { new: 'New', read: 'Read', replied: 'Replied', archived: 'Archived' };
-const TABS = [['inbox', 'Inbox'], ['activity', 'Activity'], ['account', 'Account']];
-let filter = 'open';
+const TABS = [['inbox', 'Inbox'], ['traffic', 'Visitors'], ['activity', 'Activity'], ['account', 'Account']];
+let filter = 'open', range = 30;
 
 function h(tag, attrs = {}, ...kids) {
   const el = document.createElement(tag);
@@ -42,6 +42,7 @@ async function route() {
   try {
     if (tab === 'inbox' && arg) { await showMessage(arg); tabs(tab, (await api('admin/me')).unread); }
     else if (tab === 'inbox') await showInbox();
+    else if (tab === 'traffic') await showTraffic();
     else if (tab === 'activity') await showActivity();
     else if (tab === 'account') showAccount();
     else go('inbox');
@@ -104,6 +105,77 @@ async function showMessage(id) {
       h('h2', {}, 'Privacy'), h('p', { class: 'muted' }, 'If this person asks us to delete their details, delete the message here and anything you copied elsewhere.'),
       h('div', { class: 'actions' }, h('button', { class: 'btn btn-danger', onclick: () => confirmBox.hidden = false }, 'Delete message')), confirmBox)
   );
+}
+
+/* ---------------- visitors ---------------- */
+const NS = 'http://www.w3.org/2000/svg';
+function s(tag, attrs = {}, ...kids) { const el = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v); for (const c of kids) if (c) el.append(c.nodeType ? c : document.createTextNode(String(c))); return el; }
+const num = n => Number(n || 0).toLocaleString('en-GB');
+const PAGE_NAMES = { '/': 'Home', '/services.html': 'Services & prices', '/contact.html': 'Contact', '/work.html': 'Our work', '/about.html': 'About', '/privacy.html': 'Privacy', '/guides/': 'Guides', '/404.html': 'Page not found' };
+const pageName = p => PAGE_NAMES[p] || p.replace(/^\//, '').replace(/\.html$/, '').replace(/[-_/]+/g, ' ').replace(/^./, c => c.toUpperCase()) || 'Home';
+let regionNames; try { regionNames = new Intl.DisplayNames(['en-GB'], { type: 'region' }); } catch (e) {}
+const countryName = c => { try { return (regionNames && regionNames.of(c)) || c; } catch (e) { return c; } };
+
+function change(now, before) {
+  now = Number(now || 0); before = Number(before || 0);
+  if (!before) return now ? h('span', { class: 'delta up' }, 'New') : null;
+  const pct = Math.round((now - before) / before * 100);
+  return h('span', { class: 'delta ' + (pct > 0 ? 'up' : pct < 0 ? 'down' : '') }, (pct > 0 ? '▲ ' : pct < 0 ? '▼ ' : '') + Math.abs(pct) + '%');
+}
+function tile(label, value, delta, note) { return h('div', { class: 'tile' }, h('span', { class: 'tile-k' }, label), h('strong', { class: 'tile-v' }, value), h('span', { class: 'tile-n' }, delta, note ? h('span', { class: 'muted' }, ' ' + note) : null)); }
+
+function chart(series, days, from) {
+  const map = Object.fromEntries(series.map(r => [r.day, r]));
+  const pts = []; const start = new Date(from + 'T00:00:00Z');
+  for (let i = 0; i < days; i++) { const d = new Date(start.getTime() + i * 86400000).toISOString().slice(0, 10); pts.push({ day: d, v: Number((map[d] || {}).visitors || 0) }); }
+  const W = view.clientWidth < 560 ? 340 : 600, H = W < 600 ? 170 : 180, pad = { l: 30, r: 8, t: 12, b: 24 };
+  const max = Math.max(4, ...pts.map(p => p.v)); const top = Math.ceil(max / 4) * 4;
+  const x = i => pad.l + (pts.length < 2 ? 0 : i * (W - pad.l - pad.r) / (pts.length - 1));
+  const y = v => H - pad.b - v / top * (H - pad.t - pad.b);
+  const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, class: 'chart', role: 'img', 'aria-label': `Visitors per day over the last ${days} days` });
+  for (let g = 0; g <= 4; g++) { const v = top * g / 4; svg.append(s('line', { x1: pad.l, x2: W - pad.r, y1: y(v), y2: y(v), class: 'grid' }), s('text', { x: pad.l - 6, y: y(v) + 4, 'text-anchor': 'end', class: 'axis' }, num(v))); }
+  const line = pts.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.v).toFixed(1)}`).join('');
+  svg.append(s('path', { d: `${line}L${x(pts.length - 1)},${y(0)}L${x(0)},${y(0)}Z`, class: 'area' }), s('path', { d: line, class: 'line' }));
+  const fmt = d => new Date(d + 'T00:00:00Z').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+  const ticks = days <= 7 ? pts.map((_, i) => i) : [0, Math.floor((pts.length - 1) / 2), pts.length - 1];
+  for (const i of ticks) svg.append(s('text', { x: x(i), y: H - 6, 'text-anchor': i === 0 ? 'start' : i === pts.length - 1 ? 'end' : 'middle', class: 'axis' }, fmt(pts[i].day)));
+  pts.forEach((p, i) => { const c = s('circle', { cx: x(i), cy: y(p.v), r: days <= 30 ? 3 : 0, class: 'dot' }); c.append(s('title', {}, `${fmt(p.day)}: ${num(p.v)} visitor${p.v === 1 ? '' : 's'}`)); svg.append(c); });
+  return svg;
+}
+function bars(title, rows, label, valueKey = 'visitors', empty = 'Nothing yet.') {
+  const total = rows.reduce((a, r) => a + Number(r[valueKey] || 0), 0);
+  const max = Math.max(1, ...rows.map(r => Number(r[valueKey] || 0)));
+  return h('div', { class: 'card' }, h('h2', {}, title),
+    rows.length ? h('ul', { class: 'bars' }, rows.map(r => h('li', {},
+      (el => (el.style.setProperty('--w', (Number(r[valueKey]) / max * 100).toFixed(1) + '%'), el))(h('span', { class: 'bar' })),
+      h('span', { class: 'bar-l' }, label(r.label)),
+      h('span', { class: 'bar-v' }, num(r[valueKey]), total ? h('span', { class: 'muted' }, ' · ' + Math.round(Number(r[valueKey]) / total * 100) + '%') : null)))) : h('p', { class: 'muted' }, empty));
+}
+
+async function showTraffic() {
+  const t = await api('admin/traffic?days=' + range);
+  const head = h('div', { class: 'head' }, h('h1', {}, 'Visitors'), h('p', { class: 'muted' }, 'Who is looking at nemora.uk. No cookies and no personal data: each visitor is counted with a code that changes every day.'));
+  if (!t.enabled) { view.replaceChildren(head, h('div', { class: 'empty' }, 'Visitor stats are not switched on yet. The database link is missing from the server settings.')); return; }
+  const chips = h('div', { class: 'chips' }, [[7, '7 days'], [30, '30 days'], [90, '90 days']].map(([d, l]) => h('button', { class: 'chip' + (range === d ? ' on' : ''), onclick: () => { range = d; showTraffic(); } }, l)));
+  const T = t.totals, P = t.previous;
+  const conv = T.visitors ? (Number(T.enquiries || 0) / Number(T.visitors) * 100) : 0;
+  const prevNote = `vs previous ${t.days} days`;
+  const live = h('div', { class: 'live' }, h('span', { class: 'pulse', 'aria-hidden': 'true' }), h('span', {}, h('strong', {}, num(t.live)), ` on the site in the last 30 minutes`));
+  const nothing = !Number(T.views);
+  view.replaceChildren(head, chips, live,
+    h('div', { class: 'tiles' },
+      tile('Visitors', num(T.visitors), change(T.visitors, P.visitors), prevNote),
+      tile('Page views', num(T.views), change(T.views, P.views)),
+      tile('Enquiries', num(T.enquiries), change(T.enquiries, P.enquiries)),
+      tile('Enquiry rate', (conv ? conv.toFixed(1) : '0') + '%', null, 'of visitors sent a message')),
+    nothing ? h('div', { class: 'empty' }, 'No visits recorded in this period yet. Stats start from the moment the counter went live, so give it a day.') : h('div', { class: 'card' }, h('h2', {}, 'Visitors per day'), chart(t.series, t.days, t.from)),
+    h('div', { class: 'grid2' },
+      bars('Top pages', t.pages, pageName, 'views'),
+      bars('Where they came from', t.referrers, l => l, 'visitors', 'Everyone came direct or from a link without a source (WhatsApp, email, typed in).'),
+      bars('Devices', t.devices, l => l),
+      bars('Countries', t.countries, countryName)),
+    h('div', { class: 'card' }, h('h2', {}, 'Leads and outreach'), h('p', { class: 'muted' }, 'Prospects, emails sent and client projects are tracked in your Nemora pipeline.'),
+      h('div', { class: 'actions' }, h('a', { class: 'btn', href: 'https://claude.ai/artifact/29FFTNLVhyvBBhRRJvNAmq', target: '_blank', rel: 'noopener' }, 'Open pipeline'), h('button', { class: 'btn', onclick: () => go('inbox') }, 'Open inbox'))));
 }
 
 async function showActivity() {

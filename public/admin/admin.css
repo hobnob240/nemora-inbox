@@ -95,5 +95,30 @@ main:focus{outline:none}
 
 .toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--dark);color:var(--on-dark);padding:10px 18px;border-radius:999px;font-weight:600;z-index:50;max-width:calc(100% - 32px);text-align:center}
 .toast.bad{background:var(--bad)}
+/* visitors */
+.live{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 14px}
+.pulse{width:10px;height:10px;border-radius:50%;background:var(--ok);flex-shrink:0;box-shadow:0 0 0 0 rgba(47,122,79,.5);animation:pulse 2s ease-out infinite}
+@keyframes pulse{to{box-shadow:0 0 0 10px rgba(47,122,79,0)}}
+.tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+@media (min-width:700px){.tiles{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.tile{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;display:grid;gap:2px;min-width:0}
+.tile-k{color:var(--muted);font-size:.85rem;font-weight:650}
+.tile-v{font-size:1.6rem;line-height:1.2;font-variant-numeric:tabular-nums}
+.tile-n{font-size:.8rem;min-height:1.2em}
+.delta{font-weight:700;color:var(--muted)}.delta.up{color:var(--ok)}.delta.down{color:var(--bad)}
+.chart{width:100%;height:auto;display:block}
+.chart .grid{stroke:var(--line);stroke-width:1}
+.chart .axis{fill:var(--muted);font-size:11px;font-family:var(--font)}
+.chart .line{fill:none;stroke:var(--gold-ink);stroke-width:2.5;stroke-linejoin:round;stroke-linecap:round}
+.chart .area{fill:var(--gold);opacity:.18}
+.chart .dot{fill:var(--card);stroke:var(--gold-ink);stroke-width:2}
+.grid2{display:grid;gap:14px}
+@media (min-width:700px){.grid2{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.bars{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.bars li{position:relative;display:flex;gap:10px;align-items:center;padding:7px 10px;border-radius:8px;min-width:0;overflow:hidden}
+.bar{position:absolute;inset:0 auto 0 0;width:var(--w);background:var(--bg);border-radius:8px;z-index:0}
+.bar-l,.bar-v{position:relative;z-index:1}
+.bar-l{flex:1;min-width:0;overflow-wrap:anywhere}
+.bar-v{flex-shrink:0;font-weight:700;font-variant-numeric:tabular-nums;font-size:.92rem}
 @media (max-width:520px){.kv{grid-template-columns:1fr auto}.kv .k{grid-column:1/-1}}
-@media (prefers-reduced-motion:reduce){.btn{transition:none}.btn:active{transform:none}}
+@media (prefers-reduced-motion:reduce){.pulse{animation:none}.btn{transition:none}.btn:active{transform:none}}

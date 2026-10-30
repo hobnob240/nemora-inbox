@@ -8,6 +8,10 @@
 //   RESEND_API_KEY  secret  optional, turns on an email alert for each new message
 //   ALERT_TO        text    optional, where alerts go (default daniel@nemora.uk)
 //   ALERT_FROM      text    optional, a sender on a domain verified in Resend
+//
+// Visit statistics (D1 binding DB): cookieless. Each page view stores the page, referring site, device type and
+// country. Unique visitors are counted with a hash of IP + browser + a random salt that changes every day; the IP
+// itself is never stored and the hash can't be linked across days or back to a person. Rows are kept 13 months.
 
 const SESSION_TTL = 8 * 60 * 60;
 const COOKIE = '__Host-nemora_admin';
@@ -24,6 +28,10 @@ export default {
   async fetch(request, env, ctx) {
     try { return await route(request, env, ctx); }
     catch (err) { console.error(err && err.stack || err); return json({ error: 'Something went wrong on our side. Please try again.' }, 500); }
+  },
+  // daily: delete visit statistics older than 13 months
+  async scheduled(event, env, ctx) {
+    if (env.DB) ctx.waitUntil(env.DB.prepare('DELETE FROM hits WHERE ts < ?').bind(Date.now() - 400 * 86400000).run());
   }
 };
 
@@ -31,12 +39,13 @@ async function route(req, env, ctx) {
   const url = new URL(req.url), p = url.pathname, m = req.method;
 
   // ---- public: the contact form on nemora.uk ----
-  if (p === '/api/form-token' || p === '/api/enquiry') {
+  if (p === '/api/form-token' || p === '/api/enquiry' || p === '/api/hit') {
     const cors = corsHeaders(req, env);
     if (m === 'OPTIONS') return cors ? new Response(null, { status: 204, headers: cors }) : new Response(null, { status: 403 });
     if (!cors) return json({ error: 'Request blocked for security reasons.' }, 403);
     if (p === '/api/form-token' && m === 'GET') return json({ token: await formToken(env) }, 200, cors);
     if (p === '/api/enquiry' && m === 'POST') return enquiry(req, env, ctx, cors);
+    if (p === '/api/hit' && m === 'POST') return hit(req, env, ctx, cors);
     return json({ error: 'Method not allowed.' }, 405, cors);
   }
 
@@ -101,6 +110,7 @@ async function enquiry(req, env, ctx, cors) {
   const now = Date.now(), id = String(9999999999999 - now).padStart(13, '0') + '-' + randomHex(4);
   const rec = { id, at: new Date(now).toISOString(), status: 'new', notes: '', ...v };
   await env.KV.put('msg:' + id, JSON.stringify(rec), { expirationTtl: KEEP_MESSAGES, metadata: meta(rec) });
+  ctx.waitUntil(record(req, env, { kind: 'enquiry', path: '/contact.html', ref: '', w: 0 }).catch(e => console.error('stat failed', e)));
   if (env.RESEND_API_KEY && env.ALERT_FROM) ctx.waitUntil(alert(env, rec, new URL(req.url).origin).catch(e => console.error('alert failed', e)));
   return json({ ok: true }, 200, cors);
 }
@@ -115,6 +125,68 @@ async function alert(env, rec, origin) {
     headers: { Authorization: 'Bearer ' + env.RESEND_API_KEY, 'Content-Type': 'application/json' },
     body: JSON.stringify({ from: env.ALERT_FROM, to: [to], subject: 'New website enquiry: ' + rec.name.slice(0, 60), text })
   });
+}
+
+/* ---------------- visit statistics (cookieless) ---------------- */
+const BOT = /bot|crawl|spider|slurp|headless|lighthouse|pagespeed|preview|monitor|uptime|curl|wget|python|java\/|go-http|facebookexternalhit|whatsapp|telegram|discord|embedly|bing|yandex|semrush|ahrefs/i;
+async function hit(req, env, ctx, cors) {
+  const done = new Response(null, { status: 204, headers: cors });
+  if (!env.DB || BOT.test(req.headers.get('user-agent') || '')) return done;
+  const b = await readJson(req, 2048);
+  if (!b) return done;
+  let path = String(b.p || '/').split(/[?#]/)[0].slice(0, 120);
+  if (!/^\/[A-Za-z0-9._\-\/%]*$/.test(path)) return done;
+  path = path.replace(/\/index\.html$/, '/');
+  let ref = '';
+  try { const r = new URL(String(b.r || '')); const host = r.hostname.replace(/^www\./, ''); if (!allowedOrigins(env).some(o => new URL(o).hostname.replace(/^www\./, '') === host)) ref = host.slice(0, 80); } catch (e) {}
+  ctx.waitUntil(record(req, env, { kind: 'view', path, ref, w: Number(b.w) || 0 }).catch(e => console.error('stat failed', e)));
+  return done;
+}
+let schemaReady = false;
+async function ensureSchema(env) {
+  if (schemaReady) return;
+  await env.DB.batch([
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS hits (id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, day TEXT NOT NULL, path TEXT NOT NULL, ref TEXT NOT NULL DEFAULT '', device TEXT NOT NULL DEFAULT '', country TEXT NOT NULL DEFAULT '', visitor TEXT NOT NULL, kind TEXT NOT NULL DEFAULT 'view')"),
+    env.DB.prepare('CREATE INDEX IF NOT EXISTS hits_day ON hits(day)'),
+    env.DB.prepare('CREATE INDEX IF NOT EXISTS hits_ts ON hits(ts)')
+  ]);
+  schemaReady = true;
+}
+async function record(req, env, { kind, path, ref, w }) {
+  if (!env.DB) return;
+  await ensureSchema(env);
+  const now = Date.now(), day = new Date(now).toISOString().slice(0, 10);
+  const visitor = (await sha256hex((await dailySalt(env, day)) + '|' + (req.headers.get('cf-connecting-ip') || '') + '|' + (req.headers.get('user-agent') || ''))).slice(0, 16);
+  // flood guard: at most 60 page views a minute from one visitor
+  const recent = await env.DB.prepare('SELECT COUNT(*) AS n FROM hits WHERE visitor = ? AND ts > ?').bind(visitor, now - 60000).first();
+  if (recent && recent.n >= 60) return;
+  const device = !w ? '' : w < 768 ? 'Phone' : w < 1100 ? 'Tablet' : 'Desktop';
+  const country = String((req.cf && req.cf.country) || '').slice(0, 2);
+  await env.DB.prepare('INSERT INTO hits (ts, day, path, ref, device, country, visitor, kind) VALUES (?, ?, ?, ?, ?, ?, ?, ?)').bind(now, day, path, ref, device, country, visitor, kind).run();
+}
+async function dailySalt(env, day) {
+  let s = await env.KV.get('salt:' + day);
+  if (!s) { s = randomHex(32); await env.KV.put('salt:' + day, s, { expirationTtl: 2 * 86400 }); }
+  return s;
+}
+async function traffic(env, days) {
+  if (!env.DB) return { enabled: false };
+  await ensureSchema(env);
+  const d = n => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
+  const from = d(days - 1), prevFrom = d(2 * days - 1), prevTo = d(days);
+  const q = (sql, ...a) => env.DB.prepare(sql).bind(...a);
+  const [cur, prev, series, pages, refs, devices, countries, live] = await env.DB.batch([
+    q("SELECT COUNT(DISTINCT day || visitor) AS visitors, SUM(kind = 'view') AS views, SUM(kind = 'enquiry') AS enquiries FROM hits WHERE day >= ?", from),
+    q("SELECT COUNT(DISTINCT day || visitor) AS visitors, SUM(kind = 'view') AS views, SUM(kind = 'enquiry') AS enquiries FROM hits WHERE day >= ? AND day <= ?", prevFrom, prevTo),
+    q("SELECT day, COUNT(DISTINCT visitor) AS visitors, SUM(kind = 'view') AS views FROM hits WHERE day >= ? GROUP BY day ORDER BY day", from),
+    q("SELECT path AS label, COUNT(*) AS views, COUNT(DISTINCT day || visitor) AS visitors FROM hits WHERE day >= ? AND kind = 'view' GROUP BY path ORDER BY views DESC LIMIT 10", from),
+    q("SELECT ref AS label, COUNT(DISTINCT day || visitor) AS visitors FROM hits WHERE day >= ? AND kind = 'view' AND ref != '' GROUP BY ref ORDER BY visitors DESC LIMIT 10", from),
+    q("SELECT device AS label, COUNT(DISTINCT day || visitor) AS visitors FROM hits WHERE day >= ? AND kind = 'view' AND device != '' GROUP BY device ORDER BY visitors DESC", from),
+    q("SELECT country AS label, COUNT(DISTINCT day || visitor) AS visitors FROM hits WHERE day >= ? AND kind = 'view' AND country != '' GROUP BY country ORDER BY visitors DESC LIMIT 8", from),
+    q('SELECT COUNT(DISTINCT visitor) AS n FROM hits WHERE ts > ?', Date.now() - 30 * 60000)
+  ]);
+  const one = r => (r.results && r.results[0]) || {};
+  return { enabled: true, days, from, totals: one(cur), previous: one(prev), series: series.results, pages: pages.results, referrers: refs.results, devices: devices.results, countries: countries.results, live: one(live).n || 0 };
 }
 
 async function formKey(env) {
@@ -139,6 +211,7 @@ async function hmac(keyHex, msg) {
 async function adminApi(req, env, path, m, s) {
   if (path === 'me' && m === 'GET') return json({ username: s.u, expires: s.exp, unread: (await listMessages(env)).filter(e => e.status === 'new').length });
   if (path === 'messages' && m === 'GET') return json({ messages: await listMessages(env) });
+  if (path.startsWith('traffic') && m === 'GET') { const days = [7, 30, 90].includes(Number(new URL(req.url).searchParams.get('days'))) ? Number(new URL(req.url).searchParams.get('days')) : 30; return json(await traffic(env, days)); }
   if (path.startsWith('messages/')) {
     const id = path.slice(9);
     if (!MSG_ID.test(id)) return json({ error: 'That message could not be found.' }, 404);
