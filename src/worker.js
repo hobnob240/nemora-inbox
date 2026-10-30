@@ -8,12 +8,14 @@
 //   RESEND_API_KEY  secret  optional, turns on an email alert for each new message
 //   ALERT_TO        text    optional, where alerts go (default daniel@nemora.uk)
 //   ALERT_FROM      text    optional, a sender on a domain verified in Resend
+//   CF_API_TOKEN    secret  optional, read-only Cloudflare token (Workers Scripts: Read) to list every Worker in the Sites hub
+//   CF_ACCOUNT_ID   text    optional, the Cloudflare account id that goes with CF_API_TOKEN
 //
 // Visit statistics (D1 binding DB): cookieless. Each page view stores the page, referring site, device type and
 // country. Unique visitors are counted with a hash of IP + browser + a random salt that changes every day; the IP
 // itself is never stored and the hash can't be linked across days or back to a person. Rows are kept 13 months.
 
-import { adminBiz } from './biz.js';
+import { adminBiz, checkAllSites } from './biz.js';
 
 const SESSION_TTL = 8 * 60 * 60;
 const COOKIE = '__Host-nemora_admin';
@@ -31,9 +33,11 @@ export default {
     try { return await route(request, env, ctx); }
     catch (err) { console.error(err && err.stack || err); return json({ error: 'Something went wrong on our side. Please try again.' }, 500); }
   },
-  // daily: delete visit statistics older than 13 months
+  // every 15 minutes: check every client site is up. Daily: delete visit statistics older than 13 months.
   async scheduled(event, env, ctx) {
-    if (env.DB) ctx.waitUntil(env.DB.prepare('DELETE FROM hits WHERE ts < ?').bind(Date.now() - 400 * 86400000).run());
+    if (!env.DB) return;
+    if (event.cron === '17 3 * * *') { ctx.waitUntil(env.DB.prepare('DELETE FROM hits WHERE ts < ?').bind(Date.now() - 400 * 86400000).run()); return; }
+    ctx.waitUntil(checkAllSites(env).then(changes => Promise.all(changes.map(c => siteAlert(env, c)))).catch(e => console.error('site checks failed', e)));
   }
 };
 
@@ -117,6 +121,18 @@ async function enquiry(req, env, ctx, cors) {
   return json({ ok: true }, 200, cors);
 }
 const meta = r => ({ s: r.status, n: r.name.slice(0, 60), b: (r.business || '').slice(0, 60), at: r.at, p: r.package || '', ex: r.message.slice(0, 100) });
+
+// a site went down or came back: write it to the activity log and, if email alerts are set up, send one
+async function siteAlert(env, c) {
+  const msg = c.changed === 'down' ? `${c.site.name} is DOWN (${c.error || 'no answer'})` : `${c.site.name} is back up`;
+  try {
+    const cur = (await env.KV.get('log', 'json')) || [];
+    cur.unshift({ at: new Date().toISOString(), user: 'Site monitor', action: msg, where: '' });
+    await env.KV.put('log', JSON.stringify(cur.slice(0, KEEP_LOG)));
+  } catch (e) {}
+  if (env.RESEND_API_KEY && env.ALERT_FROM) await fetch('https://api.resend.com/emails', { method: 'POST', headers: { Authorization: 'Bearer ' + env.RESEND_API_KEY, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from: env.ALERT_FROM, to: [String(env.ALERT_TO || 'daniel@nemora.uk').trim()], subject: 'NEMORA sites: ' + msg.slice(0, 90), text: msg + '\n\nOpen the hub: https://nemora-inbox.demositeforyou.workers.dev/admin/app#sites\n' }) }).catch(() => {});
+}
 
 // optional email alert (only the sender's name and business, no message contents, so nothing sensitive sits in email)
 async function alert(env, rec, origin) {

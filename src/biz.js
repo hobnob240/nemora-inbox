@@ -16,7 +16,12 @@ export const SCHEMA = [
   `CREATE INDEX IF NOT EXISTS sendlog_sent ON sendlog(sent_at)`,
   `CREATE INDEX IF NOT EXISTS sendlog_lead ON sendlog(lead_id)`,
   `CREATE INDEX IF NOT EXISTS projects_client ON projects(client_id)`,
-  `CREATE INDEX IF NOT EXISTS invoices_client ON invoices(client_id)`
+  `CREATE INDEX IF NOT EXISTS invoices_client ON invoices(client_id)`,
+  `CREATE TABLE IF NOT EXISTS sites (id TEXT PRIMARY KEY, name TEXT NOT NULL, url TEXT NOT NULL DEFAULT '', admin_url TEXT NOT NULL DEFAULT '', client_id TEXT NOT NULL DEFAULT '', project_id TEXT NOT NULL DEFAULT '', kind TEXT NOT NULL DEFAULT 'client', status TEXT NOT NULL DEFAULT 'live', hosting TEXT NOT NULL DEFAULT '', worker TEXT NOT NULL DEFAULT '', repo TEXT NOT NULL DEFAULT '', domain TEXT NOT NULL DEFAULT '', renews TEXT NOT NULL DEFAULT '', plan TEXT NOT NULL DEFAULT '', allowance_min INTEGER NOT NULL DEFAULT 0, monitor INTEGER NOT NULL DEFAULT 1, state TEXT NOT NULL DEFAULT '', fails INTEGER NOT NULL DEFAULT 0, last_code INTEGER NOT NULL DEFAULT 0, last_ms INTEGER NOT NULL DEFAULT 0, last_check TEXT NOT NULL DEFAULT '', down_since TEXT NOT NULL DEFAULT '', notes TEXT NOT NULL DEFAULT '', created TEXT NOT NULL DEFAULT '', updated TEXT NOT NULL DEFAULT '')`,
+  `CREATE TABLE IF NOT EXISTS checks (id INTEGER PRIMARY KEY AUTOINCREMENT, site_id TEXT NOT NULL, ts INTEGER NOT NULL, ok INTEGER NOT NULL, code INTEGER NOT NULL DEFAULT 0, ms INTEGER NOT NULL DEFAULT 0, error TEXT NOT NULL DEFAULT '')`,
+  `CREATE INDEX IF NOT EXISTS checks_site ON checks(site_id, ts)`,
+  `CREATE TABLE IF NOT EXISTS worklog (id INTEGER PRIMARY KEY AUTOINCREMENT, site_id TEXT NOT NULL, day TEXT NOT NULL, minutes INTEGER NOT NULL DEFAULT 0, kind TEXT NOT NULL DEFAULT 'change', what TEXT NOT NULL DEFAULT '', created TEXT NOT NULL DEFAULT '')`,
+  `CREATE INDEX IF NOT EXISTS worklog_site ON worklog(site_id, day)`
 ];
 let ready = false;
 export async function ensureBizSchema(env) {
@@ -48,9 +53,10 @@ const FIELDS = {
   leads: { name: line(120), type: line(120), area: line(120), country: line(40), status: oneOf(LEAD_STATUSES), channel: line(120), legal: line(300), email: line(300), phone: line(60), website: line(400), address: line(300), socials: line(300), reviews: int(0, 1000000), fit: int(0, 5), package: line(40), pitch: text(600), notes: text(4000), next: text(600), source: line(300), found: date, vetted: date },
   clients: { name: line(120), business: line(120), email, phone, website: url, address: text(400), notes: text(4000), lead_id: ref },
   projects: { title: line(160), client_id: ref, lead_id: ref, package: oneOf(PACKAGES), price_pence: pence, monthly_pence: pence, stage: oneOf(STAGES), due: date, preview_url: url, live_url: url, brief: text(20000), notes: text(4000) },
+  sites: { name: line(120), url: url, admin_url: url, client_id: ref, project_id: ref, kind: oneOf(['client', 'own', 'demo']), status: oneOf(['live', 'building', 'demo', 'paused', 'retired']), hosting: oneOf(['', 'Cloudflare Worker', 'Cloudflare Pages', 'GitHub Pages', 'Other']), worker: v => { const s = line(80)(v); if (s && !/^[a-z0-9][a-z0-9-]{0,62}$/.test(s)) throw new Bad('Worker names use lowercase letters, numbers and dashes.'); return s; }, repo: v => { const s = line(120)(v).replace(/^https?:\/\/github\.com\//, '').replace(/\/$/, ''); if (s && !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(s)) throw new Bad('Repos look like owner/name.'); return s; }, domain: v => line(120)(v).toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, ''), renews: date, plan: oneOf(['', 'Starter', 'Business', 'Premium', 'Custom', 'None']), allowance_min: int(0, 6000), monitor: int(0, 1), notes: text(4000) },
   invoices: { client_id: ref, project_id: ref, issued: date, due: date, notes: text(1000), status: oneOf(INVOICE_STATUSES), paid_on: date }
 };
-const REQUIRED = { leads: ['name'], clients: ['name'], projects: ['title'], invoices: ['client_id', 'issued', 'due'] };
+const REQUIRED = { sites: ['name'], leads: ['name'], clients: ['name'], projects: ['title'], invoices: ['client_id', 'issued', 'due'] };
 function clean(kind, body, partial) {
   const out = {};
   for (const [k, fn] of Object.entries(FIELDS[kind])) if (body[k] !== undefined) out[k] = fn(body[k]);
@@ -100,7 +106,7 @@ const plusDays = (iso, n) => { const d = new Date(iso + 'T12:00:00Z'); d.setUTCD
 // returns a Response, or null if the path isn't a business route
 export async function adminBiz(req, env, path, m, readJson, log, user, extra) {
   const parts = path.split('/'), [res, id, sub] = parts;
-  if (!['dashboard', 'leads', 'outbox', 'clients', 'projects', 'invoices', 'reports', 'settings', 'rulebook'].includes(res)) return null;
+  if (!['dashboard', 'leads', 'outbox', 'clients', 'projects', 'invoices', 'reports', 'settings', 'rulebook', 'sites', 'worklog', 'cf'].includes(res)) return null;
   if (!env.DB) return reply({ error: 'The database is not connected. Add the D1 binding called DB in Cloudflare.' }, 503);
   await ensureBizSchema(env);
   try {
@@ -115,6 +121,9 @@ export async function adminBiz(req, env, path, m, readJson, log, user, extra) {
     if (res === 'projects') return await projects(env, id, m, body, log);
     if (res === 'invoices') return await invoices(env, id, m, body, log);
     if (res === 'reports' && m === 'GET') return reply({ reports: (await all(env, 'SELECT * FROM reports ORDER BY date DESC, type LIMIT 60')).map(r => ({ ...r, needs_you: parseJSON(r.needs_you, []), highlights: parseJSON(r.highlights, []) })) });
+    if (res === 'sites') return await sites(env, id, sub, m, body, log);
+    if (res === 'worklog' && id && m === 'DELETE') { await run(env, 'DELETE FROM worklog WHERE id = ?', Number(id) || 0); return reply({ ok: true }); }
+    if (res === 'cf' && id === 'workers' && m === 'GET') return reply(await cfWorkers(env));
     if (res === 'rulebook' && m === 'GET') return reply({ rulebook: await getConfig(env, 'rulebook', null), prospecting: await getConfig(env, 'prospecting', null) });
     if (res === 'settings') {
       if (m === 'GET') return reply({ business: await getConfig(env, 'business', {}) });
@@ -136,7 +145,7 @@ export async function adminBiz(req, env, path, m, readJson, log, user, extra) {
 async function dashboard(env, { unread, visitors, latestMessages }) {
   const t = today(), ms = monthStart(), ws = weekStart(), soon = plusDays(t, 7), ys = t.slice(0, 4) + '-01-01';
   const q = (sql, ...a) => env.DB.prepare(sql).bind(...a);
-  const [leadCounts, sentWeek, sentToday, moneyMonth, moneyYear, outstanding, overdue, recurring, stages, dueSoon, report, hotLeads, queued, recentSent] = await env.DB.batch([
+  const [leadCounts, sentWeek, sentToday, moneyMonth, moneyYear, outstanding, overdue, recurring, stages, dueSoon, report, hotLeads, queued, recentSent, siteRows] = await env.DB.batch([
     q('SELECT status, COUNT(*) AS n FROM leads GROUP BY status'),
     q('SELECT COUNT(*) AS n FROM sendlog WHERE sent_at >= ?', ws),
     q('SELECT COUNT(*) AS n FROM sendlog WHERE sent_at >= ?', t),
@@ -150,8 +159,10 @@ async function dashboard(env, { unread, visitors, latestMessages }) {
     q('SELECT * FROM reports ORDER BY date DESC, CASE type WHEN \'monthly\' THEN 0 WHEN \'weekly\' THEN 1 ELSE 2 END LIMIT 1'),
     q("SELECT id, name, type, area, status, package, next, updated FROM leads WHERE status IN ('replied', 'interested') ORDER BY updated DESC LIMIT 6"),
     q('SELECT COUNT(*) AS n FROM outbox'),
-    q('SELECT business, kind, sent_at, lead_id FROM sendlog ORDER BY sent_at DESC LIMIT 5')
+    q('SELECT business, kind, sent_at, lead_id FROM sendlog ORDER BY sent_at DESC LIMIT 5'),
+    q("SELECT id, name, status, state, monitor, renews, down_since FROM sites WHERE status != 'retired'")
   ]);
+  const sl = siteRows.results || [], soon30 = plusDays(t, 30);
   const one = r => (r.results && r.results[0]) || {};
   const by = r => Object.fromEntries((r.results || []).map(x => [x.status || x.stage, x.n]));
   const rep = one(report);
@@ -160,7 +171,8 @@ async function dashboard(env, { unread, visitors, latestMessages }) {
     leads: by(leadCounts), sentWeek: one(sentWeek).n || 0, sentToday: one(sentToday).n || 0, queued: one(queued).n || 0,
     money: { month: one(moneyMonth).p, year: one(moneyYear).p, outstanding: one(outstanding).p, outstandingCount: one(outstanding).n, recurring: one(recurring).p, recurringCount: one(recurring).n },
     overdue: overdue.results || [], stages: by(stages), dueSoon: dueSoon.results || [], hotLeads: hotLeads.results || [], recentSent: recentSent.results || [],
-    report: rep.id ? { ...rep, needs_you: parseJSON(rep.needs_you, []), highlights: parseJSON(rep.highlights, []) } : null
+    report: rep.id ? { ...rep, needs_you: parseJSON(rep.needs_you, []), highlights: parseJSON(rep.highlights, []) } : null,
+    sites: { total: sl.length, live: sl.filter(x => x.status === 'live').length, down: sl.filter(x => x.monitor && x.state === 'down').map(x => ({ id: x.id, name: x.name, since: x.down_since })), renewing: sl.filter(x => x.renews && x.renews <= soon30).map(x => ({ id: x.id, name: x.name, renews: x.renews })) }
   };
 }
 
@@ -355,4 +367,89 @@ async function invoices(env, id, m, body, log) {
     await run(env, 'DELETE FROM invoices WHERE id = ?', id); await log('Deleted draft invoice ' + inv.number); return reply({ ok: true });
   }
   return reply({ error: 'Not found.' }, 404);
+}
+
+
+/* ---------- sites hub ---------- */
+async function sites(env, id, sub, m, body, log) {
+  if (!id) {
+    if (m === 'GET') {
+      const since = Date.now() - 30 * 86400000, ms = monthStart();
+      const [rows, up, used] = await Promise.all([
+        all(env, `SELECT s.*, c.name AS client_name, c.business AS client_business FROM sites s LEFT JOIN clients c ON c.id = s.client_id ORDER BY CASE s.status WHEN 'live' THEN 0 WHEN 'building' THEN 1 WHEN 'demo' THEN 2 WHEN 'paused' THEN 3 ELSE 4 END, s.name`),
+        all(env, 'SELECT site_id, COUNT(*) AS n, SUM(ok) AS good FROM checks WHERE ts > ? GROUP BY site_id', since),
+        all(env, 'SELECT site_id, SUM(minutes) AS m FROM worklog WHERE day >= ? GROUP BY site_id', ms)
+      ]);
+      const U = Object.fromEntries(up.map(r => [r.site_id, r])), M = Object.fromEntries(used.map(r => [r.site_id, r.m]));
+      return reply({ sites: rows.map(r => ({ ...r, uptime: U[r.id] && U[r.id].n ? Math.round(U[r.id].good / U[r.id].n * 1000) / 10 : null, used_min: M[r.id] || 0 })), today: today() });
+    }
+    if (m === 'POST') {
+      const v = clean('sites', body); const sid = newId('s');
+      await insert(env, 'sites', { ...v, id: sid, created: now(), updated: now() });
+      await log('Added site ' + v.name.slice(0, 40)); return reply({ ok: true, id: sid });
+    }
+    return reply({ error: 'Not found.' }, 404);
+  }
+  const site = await first(env, 'SELECT * FROM sites WHERE id = ?', id);
+  if (!site) return reply({ error: 'That site could not be found.' }, 404);
+  if (sub === 'check' && m === 'POST') { await checkSite(env, site); return reply({ ok: true, site: await first(env, 'SELECT * FROM sites WHERE id = ?', id) }); }
+  if (sub === 'log' && m === 'POST') {
+    const minutes = int(1, 600)(body.minutes); if (!minutes) throw new Bad('How many minutes did it take?');
+    const what = line(300)(body.what); if (!what) throw new Bad('Say what was done.');
+    await insert(env, 'worklog', { site_id: id, day: date(body.day) || today(), minutes, kind: oneOf(['change', 'fix', 'update', 'other'])(body.kind || 'change'), what, created: now() });
+    return reply({ ok: true });
+  }
+  if (m === 'GET') {
+    const since = Date.now() - 30 * 86400000;
+    const [checks, days, work, client, project] = await Promise.all([
+      all(env, 'SELECT ts, ok, code, ms, error FROM checks WHERE site_id = ? ORDER BY ts DESC LIMIT 20', id),
+      all(env, "SELECT strftime('%Y-%m-%d', ts / 1000, 'unixepoch') AS day, COUNT(*) AS n, SUM(ok) AS good, CAST(AVG(ms) AS INTEGER) AS ms FROM checks WHERE site_id = ? AND ts > ? GROUP BY day ORDER BY day", id, since),
+      all(env, 'SELECT id, day, minutes, kind, what FROM worklog WHERE site_id = ? ORDER BY day DESC, id DESC LIMIT 60', id),
+      site.client_id ? first(env, 'SELECT id, name, business FROM clients WHERE id = ?', site.client_id) : null,
+      site.project_id ? first(env, 'SELECT id, title, stage FROM projects WHERE id = ?', site.project_id) : null
+    ]);
+    return reply({ site, checks, days, work, client, project, today: today() });
+  }
+  if (m === 'PATCH') { await update(env, 'sites', id, { ...clean('sites', body, true), updated: now() }); return reply({ ok: true }); }
+  if (m === 'DELETE') {
+    await env.DB.batch([env.DB.prepare('DELETE FROM checks WHERE site_id = ?').bind(id), env.DB.prepare('DELETE FROM worklog WHERE site_id = ?').bind(id), env.DB.prepare('DELETE FROM sites WHERE id = ?').bind(id)]);
+    await log('Removed site ' + site.name.slice(0, 40)); return reply({ ok: true });
+  }
+  return reply({ error: 'Not found.' }, 404);
+}
+
+// fetch a site's homepage and record whether it answered. Two failures in a row = down.
+export async function checkSite(env, site) {
+  if (!site.url) return;
+  const t0 = Date.now(); let ok = 0, code = 0, error = '';
+  try {
+    const r = await fetch(site.url, { method: 'GET', redirect: 'follow', headers: { 'User-Agent': 'NEMORA uptime check (+https://nemora.uk)' }, signal: AbortSignal.timeout(12000), cf: { cacheTtl: 0 } });
+    code = r.status; ok = r.status < 400 ? 1 : 0; if (!ok) error = 'HTTP ' + r.status;
+    try { await r.body?.cancel(); } catch (e) {}
+  } catch (e) { error = String(e && e.name === 'TimeoutError' ? 'No answer within 12 seconds' : (e && e.message) || e).slice(0, 160); }
+  const ms = Date.now() - t0, fails = ok ? 0 : site.fails + 1;
+  const state = ok ? 'up' : fails >= 2 ? 'down' : (site.state || 'up');
+  const downSince = state === 'down' ? (site.state === 'down' ? site.down_since : new Date().toISOString()) : '';
+  await env.DB.batch([
+    env.DB.prepare('INSERT INTO checks (site_id, ts, ok, code, ms, error) VALUES (?, ?, ?, ?, ?, ?)').bind(site.id, Date.now(), ok, code, ms, error),
+    env.DB.prepare('UPDATE sites SET state = ?, fails = ?, last_code = ?, last_ms = ?, last_check = ?, down_since = ? WHERE id = ?').bind(state, fails, code, ms, new Date().toISOString(), downSince, site.id)
+  ]);
+  return { changed: state !== site.state && site.state !== '' ? state : null, site, error };
+}
+export async function checkAllSites(env) {
+  await ensureBizSchema(env);
+  const list = await all(env, "SELECT * FROM sites WHERE monitor = 1 AND url != '' AND status != 'retired'");
+  const results = await Promise.all(list.map(s => checkSite(env, s).catch(e => ({ error: String(e) }))));
+  await run(env, 'DELETE FROM checks WHERE ts < ?', Date.now() - 35 * 86400000);
+  return results.filter(r => r && r.changed);
+}
+
+// optional: list every Worker in the Cloudflare account (needs a read-only API token set as a secret)
+async function cfWorkers(env) {
+  if (!env.CF_API_TOKEN || !env.CF_ACCOUNT_ID) return { enabled: false };
+  const r = await fetch(`https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(env.CF_ACCOUNT_ID)}/workers/scripts`, { headers: { Authorization: 'Bearer ' + env.CF_API_TOKEN } });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok || !d.success) return { enabled: true, error: 'Cloudflare refused the request. Check the API token has "Workers Scripts: Read".' };
+  const linked = new Set((await all(env, "SELECT worker FROM sites WHERE worker != ''")).map(x => x.worker));
+  return { enabled: true, workers: (d.result || []).map(w => ({ name: w.id, modified: w.modified_on, created: w.created_on, linked: linked.has(w.id) })).sort((a, b) => (b.modified || '').localeCompare(a.modified || '')) };
 }

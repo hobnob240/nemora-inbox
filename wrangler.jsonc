@@ -4,6 +4,8 @@
   "name": "nemora-inbox",
   "main": "src/worker.js",
   "compatibility_date": "2025-09-01",
+  // lets the site monitor reach our other *.workers.dev sites over the public internet
+  "compatibility_flags": ["global_fetch_strictly_public"],
   "assets": {
     "directory": "./public",
     "binding": "ASSETS",
@@ -17,8 +19,8 @@
   "d1_databases": [
     { "binding": "DB", "database_name": "nemora-analytics", "database_id": "46b63d89-a211-40a1-a3a7-8bebd6d15ef3" }
   ],
-  // daily clean-up of visit statistics older than 13 months
-  "triggers": { "crons": ["17 3 * * *"] },
+  // daily clean-up of visit statistics; every 15 minutes: check client sites are up
+  "triggers": { "crons": ["17 3 * * *", "*/15 * * * *"] },
   "vars": {
     "SITE_ORIGINS": "https://nemora.uk,https://www.nemora.uk"
   },

@@ -26,6 +26,10 @@ const ICONS = {
   work: 'M3 7h18v13H3z|M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2|M3 12h18',
   money: 'M12 2v20|M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6',
   visitors: 'M3 3v18h18|M7 15l4-4 3 3 5-6',
+  sites: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z|M2 12h20|M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z',
+  github: 'M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22',
+  cloud: 'M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z',
+  refresh: 'M23 4v6h-6|M1 20v-6h6|M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15',
   settings: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z|M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z',
   more: 'M12 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2z|M19 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2z|M5 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2z',
   logout: 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4|M16 17l5-5-5-5|M21 12H9',
@@ -142,10 +146,10 @@ const PRICES = { Starter: [40000, 2500], Business: [79500, 5000], Premium: [1600
 const tag = (map, k) => pill((map[k] || [k])[0], (map[k] || [])[1]);
 
 /* ================= shell ================= */
-const NAV = [['home', 'Home'], ['inbox', 'Inbox'], ['leads', 'Leads'], ['work', 'Work'], ['money', 'Money']];
+const NAV = [['home', 'Home'], ['inbox', 'Inbox'], ['leads', 'Leads'], ['sites', 'Sites'], ['work', 'Work'], ['money', 'Money']];
 const NAV_MORE = [['visitors', 'Visitors'], ['settings', 'Settings']];
-const SECTION = { inbox: 'inbox', leads: 'leads', lead: 'leads', work: 'work', project: 'work', client: 'work', clients: 'work', money: 'money', invoice: 'money', visitors: 'visitors', settings: 'settings', activity: 'settings', home: 'home' };
-const TITLES = { home: 'Home', inbox: 'Inbox', leads: 'Leads', work: 'Work', money: 'Money', visitors: 'Visitors', settings: 'Settings' };
+const SECTION = { sites: 'sites', site: 'sites', inbox: 'inbox', leads: 'leads', lead: 'leads', work: 'work', project: 'work', client: 'work', clients: 'work', money: 'money', invoice: 'money', visitors: 'visitors', settings: 'settings', activity: 'settings', home: 'home' };
+const TITLES = { sites: 'Sites', home: 'Home', inbox: 'Inbox', leads: 'Leads', work: 'Work', money: 'Money', visitors: 'Visitors', settings: 'Settings' };
 let me = { username: '', unread: 0 };
 function shell() {
   $('#side-nav').replaceChildren(...NAV.map(([k, l]) => h('a', { href: '#' + k, 'data-k': k }, icon(k), l, k === 'inbox' ? h('span', { class: 'count', hidden: true }) : null)), h('div', { class: 'sep' }), ...NAV_MORE.map(([k, l]) => h('a', { href: '#' + k, 'data-k': k }, icon(k), l)));
@@ -179,6 +183,7 @@ async function route() {
     home: showHome, inbox: id ? () => showMessage(id) : showInbox, leads: showLeads, lead: () => showLead(id),
     work: () => showWork('projects'), clients: () => showWork('clients'),
     project: () => id === 'new' ? editProject(null, extra) : showProject(id), client: () => id === 'new' ? editClient(null) : showClient(id),
+    sites: showSites, site: () => id === 'new' ? editSite(null, extra) : showSite(id),
     money: showMoney, invoice: () => id === 'new' ? editInvoice(null, extra) : showInvoice(id),
     visitors: showTraffic, settings: showSettings, activity: showActivity
   };
@@ -200,6 +205,8 @@ async function showHome() {
   for (const i of d.overdue) todo.push(['#invoice/' + i.id, 'alert', 'bad', `${i.business || i.name || 'A client'} owes ${money(i.total_pence)}`, `Invoice ${i.number} was due ${day(i.due)}`]);
   for (const l of d.hotLeads) todo.push(['#lead/' + l.id, 'star', 'ok', `${l.name} ${l.status === 'interested' ? 'is interested' : 'replied'}`, l.next || [l.type, l.area].filter(Boolean).join(' · ')]);
   for (const p of d.dueSoon) todo.push(['#project/' + p.id, 'clock', p.due < d.today ? 'bad' : '', `${p.title} ${p.due < d.today ? 'was due' : 'is due'} ${day(p.due)}`, (STAGE[p.stage] || [p.stage])[0]]);
+  for (const x of (d.sites || {}).down || []) todo.unshift(['#site/' + x.id, 'alert', 'bad', `${x.name} is down`, x.since ? 'Since ' + when(x.since) : 'Not answering']);
+  for (const x of (d.sites || {}).renewing || []) todo.push(['#site/' + x.id, 'clock', x.renews < d.today ? 'bad' : '', `${x.name}: domain renews ${day(x.renews)}`, 'Renew it so the site stays online']);
   if (d.report && d.report.date === d.today) for (const n of d.report.needs_you || []) todo.push([null, 'check', '', n, 'From today\'s outreach report']);
 
   const v = d.visitors;
@@ -215,7 +222,7 @@ async function showHome() {
       tile('Paid this month', money(d.money.month), `${money(d.money.year)} this year`, 'hero', '#money'),
       tile('Owed to you', money(d.money.outstanding), d.overdue.length ? h('span', { class: 'delta down' }, plural(d.overdue.length, 'overdue invoice')) : plural(d.money.outstandingCount, 'invoice') + ' out', '', '#money'),
       tile('Monthly plans', money(d.money.recurring), plural(d.money.recurringCount, 'client') + ' paying monthly', '', '#work'),
-      tile('Visitors this week', v ? num(v.week) : '—', v ? [vDelta != null ? h('span', { class: 'delta ' + (vDelta >= 0 ? 'up' : 'down') }, (vDelta >= 0 ? '▲ ' : '▼ ') + Math.abs(vDelta) + '% ') : null, `${num(v.live)} on the site now`] : '', '', '#visitors')),
+      tile('Sites', num((d.sites || {}).total || 0), (d.sites || {}).down && d.sites.down.length ? h('span', { class: 'delta down' }, plural(d.sites.down.length, 'site') + ' down') : (d.sites || {}).total ? h('span', { class: 'delta up' }, 'All up') : 'Add your first site', '', '#sites')),
     h('div', { class: 'grid side-r' },
       card('Needs you', h('div', { class: 'todo' }, todo.length ? todo.slice(0, 8).map(([href, ic, tone, t, sub]) => h(href ? 'a' : 'div', { href }, h('span', { class: 'ic ' + tone }, icon(ic)), h('span', { class: 'tx' }, h('strong', {}, t), sub ? h('span', {}, sub) : null), href ? icon('chev', 'chev') : null))
         : h('div', {}, h('span', { class: 'ic ok' }, icon('check')), h('span', { class: 'tx' }, h('strong', {}, 'Nothing needs you right now'), h('span', {}, 'New messages, replies and overdue invoices show up here.'))))),
@@ -397,7 +404,7 @@ async function showProject(id) {
       h('div', { class: 'grid' },
         card('Money', [h('div', { class: 'tiles' }, tile('Setup fee', money(p.price_pence)), tile('Monthly', money(p.monthly_pence)), tile('Paid', money(paid)), tile('Owed', money(owed))),
           invoices.length ? h('div', { class: 'list' }, invoices.map(invRow)) : null,
-          client ? h('div', { class: 'actions' }, h('a', { class: 'btn btn-gold', href: '#invoice/new/' + id }, icon('plus'), 'Create invoice')) : h('p', { class: 'small muted' }, 'Link this project to a client (Edit) to invoice it.')]),
+          client ? h('div', { class: 'actions' }, h('a', { class: 'btn btn-gold', href: '#invoice/new/' + id }, icon('plus'), 'Create invoice'), h('a', { class: 'btn', href: '#site/new/' + id }, icon('sites'), 'Add to Sites')) : h('p', { class: 'small muted' }, 'Link this project to a client (Edit) to invoice it.')]),
         p.brief ? card('Brief', h('details', {}, h('summary', {}, 'Research, client direction and open questions'), h('div', { class: 'prose small' }, p.brief))) : null,
         card('Notes', [notes, h('div', { class: 'actions' }, h('button', { class: 'btn btn-sm', onclick: () => act(() => api('admin/projects/' + id, { method: 'PATCH', body: { notes: notes.value } }), 'Notes saved') }, 'Save notes'))])),
       h('div', { class: 'grid' },
@@ -587,6 +594,107 @@ async function showInvoice(id) {
       paidBox, voidBox, delBox,
       ['draft', 'sent'].includes(i.status) ? h('p', { class: 'small muted' }, 'To send it: Print or save PDF, choose "Save as PDF", then attach it to the email.') : null),
     sheet);
+}
+
+/* ================= sites hub ================= */
+const SITE_STATUS = { live: ['Live', 'ok'], building: ['Building', 'warn'], demo: ['Demo', 'info'], paused: ['Paused', ''], retired: ['Retired', ''] };
+const KIND = { client: 'Client site', own: 'Our own', demo: 'Demo' };
+let siteFilter = 'all';
+const health = st => st.monitor ? (st.state === 'down' ? ['down', 'Down'] : st.state === 'up' ? ['up', 'Up'] : ['wait', 'Not checked yet']) : ['off', 'Not monitored'];
+const hDot = st => { const [k, l] = health(st); return h('span', { class: 'hdot ' + k, role: 'img', 'aria-label': l, title: l }); };
+const host = u => { try { return new URL(u).host; } catch (e) { return ''; } };
+const cfLink = w => 'https://dash.cloudflare.com/?to=/:account/workers/services/view/' + encodeURIComponent(w) + '/production';
+async function showSites() {
+  const { sites, today } = await api('admin/sites');
+  const live = sites.filter(x => x.status === 'live'), down = sites.filter(x => x.monitor && x.state === 'down');
+  const soon = addDays(today, 30), renew = sites.filter(x => x.renews && x.renews <= soon);
+  const groups = { all: () => true, live: x => x.status === 'live', building: x => ['building', 'demo'].includes(x.status), down: x => x.monitor && x.state === 'down', own: x => x.kind === 'own', retired: x => ['paused', 'retired'].includes(x.status) };
+  const list = sites.filter(groups[siteFilter] || groups.all);
+  const plans = sites.filter(x => x.status === 'live' && x.allowance_min);
+  render(
+    pageHead('Hub', 'Sites', 'Every website NEMORA builds and looks after, in one place. Each one is checked every 15 minutes.', [h('a', { class: 'btn btn-gold', href: '#site/new' }, icon('plus'), 'Add site')]),
+    h('div', { class: 'tiles' },
+      tile('Live sites', num(live.length), plural(sites.length, 'site') + ' in total', 'hero'),
+      tile('Right now', down.length ? plural(down.length, 'down') : sites.some(x => x.monitor) ? 'All up' : '—', down.length ? h('span', { class: 'delta down' }, down.map(x => x.name).join(', ')) : 'Checked every 15 minutes'),
+      tile('Care time this month', num(Math.round(plans.reduce((a, x) => a + x.used_min, 0) / 6) / 10) + ' h', `of ${num(Math.round(plans.reduce((a, x) => a + x.allowance_min, 0) / 6) / 10)} h included in plans`),
+      tile('Domains renewing', num(renew.length), renew.length ? renew.map(x => x.name).join(', ') : 'none in the next 30 days')),
+    chipsRow([['all', 'All', sites.length], ['live', 'Live', live.length], ['building', 'Building and demos', sites.filter(groups.building).length], ['down', 'Down', down.length], ['own', 'Our own', sites.filter(groups.own).length], ['retired', 'Paused', sites.filter(groups.retired).length]].filter(([k, , n]) => n || k === 'all' || k === siteFilter), siteFilter, k => { siteFilter = k; showSites(); }),
+    list.length ? card(null, h('div', { class: 'list' }, list.map(x => h('a', { class: 'row', href: '#site/' + x.id },
+      hDot(x),
+      h('span', { class: 'body' }, h('span', { class: 't' }, x.name), h('span', { class: 's' }, [host(x.url) || 'No address yet', x.client_business || x.client_name || KIND[x.kind], x.hosting].filter(Boolean).join(' · '))),
+      h('span', { class: 'end' }, tag(SITE_STATUS, x.status), h('span', { class: 'when' }, x.monitor && x.last_check ? (x.state === 'down' ? 'Down' : (x.uptime != null ? x.uptime + '% · ' : '') + x.last_ms + ' ms') : x.monitor ? 'Waiting for first check' : 'Not monitored'))))))
+      : empty('No sites here yet', 'Add every site you build and look after, and the hub keeps an eye on them for you.', h('a', { class: 'btn btn-gold', href: '#site/new' }, 'Add a site')),
+    await cfCard());
+}
+async function cfCard() {
+  const d = await api('admin/cf/workers').catch(() => ({ enabled: false }));
+  if (!d.enabled) return card('Everything on Cloudflare', [h('p', { class: 'small muted' }, 'Optional: let the hub list every Worker in your Cloudflare account, so nothing gets forgotten. In Cloudflare, create an API token with only "Workers Scripts: Read", then add it to the nemora-inbox Worker as a secret called CF_API_TOKEN, and a variable CF_ACCOUNT_ID with your account ID.')]);
+  if (d.error) return card('Everything on Cloudflare', h('div', { class: 'msg err' }, d.error));
+  const un = d.workers.filter(w => !w.linked);
+  return card(`Everything on Cloudflare · ${num(d.workers.length)} Workers`, [h('p', { class: 'small muted' }, un.length ? `${plural(un.length, 'Worker')} not linked to a site yet. Link the real ones; old test Workers can be deleted in Cloudflare.` : 'Every Worker is linked to a site.'),
+    h('div', { class: 'list' }, d.workers.map(w => h('div', { class: 'row' }, h('span', { class: 'body' }, h('span', { class: 't' }, w.name, w.linked ? pill('Linked', 'ok') : null), h('span', { class: 's' }, 'Last deployed ' + day(w.modified))),
+      h('span', { class: 'end' }, w.linked ? null : h('a', { class: 'btn btn-sm', href: '#site/new/w:' + w.name }, 'Add as site')))))]);
+}
+async function showSite(id) {
+  const { site: x, checks, days, work, client, project, today } = await api('admin/sites/' + id);
+  const [hk, hl] = health(x);
+  const ms = today.slice(0, 8) + '01', used = work.filter(w => w.day >= ms).reduce((a, w) => a + w.minutes, 0);
+  const link = (u, label, ic) => safeHref(u) ? h('a', { class: 'btn', href: safeHref(u), target: '_blank', rel: 'noopener noreferrer' }, icon(ic), label) : null;
+  // 30-day uptime strip
+  const byDay = Object.fromEntries(days.map(d => [d.day, d])); const cells = [];
+  for (let i = 29; i >= 0; i--) { const dd = addDays(today, -i), r = byDay[dd]; const cls = !r ? 'none' : r.good === r.n ? 'good' : r.good / r.n >= .9 ? 'some' : 'bad'; cells.push(h('span', { class: 'ucell ' + cls, title: r ? `${day(dd)}: ${Math.round(r.good / r.n * 100)}% up, ${r.ms} ms average` : `${day(dd)}: no checks` })); }
+  const totalN = days.reduce((a, d) => a + d.n, 0), totalG = days.reduce((a, d) => a + d.good, 0);
+  const logForm = form([{ k: 'what', label: 'What was done', full: true, placeholder: 'e.g. Updated the show dates' }, { k: 'minutes', label: 'Minutes', type: 'number', value: 15 }, { k: 'kind', label: 'Type', type: 'select', options: [['change', 'Change'], ['fix', 'Fix'], ['update', 'Update'], ['other', 'Other']] }, { k: 'day', label: 'Date', type: 'date', value: today }], {}, { submit: 'Log time', onSave: async v => { await api('admin/sites/' + id + '/log', { method: 'POST', body: v }); toast('Logged'); route(); } });
+  const del = confirmBox('Remove this site from the hub? The website itself is not touched.', 'Remove', async () => { if (await act(() => api('admin/sites/' + id, { method: 'DELETE' }), 'Site removed')) go('sites'); });
+  const pct = x.allowance_min ? Math.min(1, used / x.allowance_min) : 0;
+  render(
+    pageHead(x.client_id && client ? client.business || client.name : KIND[x.kind], x.name, host(x.url) || null, [tag(SITE_STATUS, x.status), h('button', { class: 'btn btn-sm', onclick: () => editSite(x) }, 'Edit')], ['sites', 'Sites']),
+    h('div', { class: 'card status-card ' + hk }, h('div', { class: 'status-line' }, hDot(x), h('div', {}, h('strong', {}, x.monitor ? (hk === 'down' ? 'Down' + (x.down_since ? ' since ' + full(x.down_since) : '') : hk === 'up' ? 'Up and answering' : 'Not checked yet') : 'Not monitored'),
+      h('span', { class: 'small muted' }, x.last_check ? `Last check ${when(x.last_check)} · ${x.last_code ? 'HTTP ' + x.last_code : 'no answer'} · ${x.last_ms} ms` : 'Checked every 15 minutes once it has an address')),
+      h('button', { class: 'btn btn-sm', onclick: async e => { e.target.disabled = true; const r = await act(() => api('admin/sites/' + id + '/check', { method: 'POST' }), 'Checked'); if (r) route(); else e.target.disabled = false; } }, icon('refresh'), 'Check now')),
+      h('div', { class: 'ustrip', role: 'img', 'aria-label': 'Uptime over the last 30 days' }, cells),
+      h('div', { class: 'ustrip-legend small muted' }, h('span', {}, '30 days ago'), h('span', {}, totalN ? `${Math.round(totalG / totalN * 1000) / 10}% up over ${plural(totalN, 'check')}` : 'No checks yet'), h('span', {}, 'Today'))),
+    h('div', { class: 'card' }, h('div', { class: 'actions' }, link(x.url, 'Open site', 'link'), link(x.admin_url, 'Open its admin', 'shield'), x.repo ? link('https://github.com/' + x.repo, 'Code on GitHub', 'github') : null, x.worker ? link(cfLink(x.worker), 'Cloudflare', 'cloud') : null)),
+    h('div', { class: 'grid side-r' },
+      h('div', { class: 'grid' },
+        card('Care time this month', [x.allowance_min ? [h('div', { class: 'meter' }, style(h('span', { class: pct >= 1 ? 'over' : '' }), 'transform', `scaleX(${pct})`)), h('p', { class: 'small muted' }, `${num(used)} of ${num(x.allowance_min)} minutes used in the ${x.plan || 'care'} plan${used > x.allowance_min ? '. Over the allowance: extra time can be quoted.' : ''}`)] : h('p', { class: 'small muted' }, 'No monthly allowance set. Add one with Edit (Business 60 minutes, Premium 120).'),
+          work.length ? h('div', { class: 'list' }, work.map(w => h('div', { class: 'row' }, h('span', { class: 'body' }, h('span', { class: 't' }, w.what), h('span', { class: 's' }, `${day(w.day)} · ${w.kind} · ${w.minutes} min`)), h('span', { class: 'end' }, h('button', { class: 'btn btn-sm btn-ghost', 'aria-label': 'Delete entry', onclick: async () => { if (await act(() => api('admin/worklog/' + w.id, { method: 'DELETE' }), 'Entry removed')) route(); } }, icon('x')))))) : null]),
+        logForm.el,
+        x.notes ? card('Notes', h('p', { class: 'prose' }, x.notes)) : null),
+      h('div', { class: 'grid' },
+        card('Details', h('div', { class: 'kvs' },
+          kv('Client', client ? h('a', { href: '#client/' + client.id }, client.business || client.name) : null), kv('Project', project ? h('a', { href: '#project/' + project.id }, project.title) : null),
+          kv('Type', KIND[x.kind]), kv('Hosting', x.hosting), kv('Worker', x.worker), kv('Code', x.repo), kv('Domain', x.domain), kv('Renews', x.renews ? longDay(x.renews) : ''), kv('Plan', x.plan), kv('Added', day(x.created)))),
+        checks.length ? card('Latest checks', h('div', { class: 'list' }, checks.slice(0, 8).map(c => h('div', { class: 'row' }, h('span', { class: 'hdot ' + (c.ok ? 'up' : 'down') }), h('span', { class: 'body' }, h('span', { class: 's' }, c.ok ? `HTTP ${c.code}` : c.error || 'No answer')), h('span', { class: 'end' }, h('span', { class: 'when' }, `${when(new Date(c.ts).toISOString())} · ${c.ms} ms`)))))) : null,
+        card(null, [h('div', { class: 'actions' }, h('button', { class: 'btn btn-sm btn-danger', onclick: () => del.hidden = false }, icon('trash'), 'Remove from hub')), del]))));
+}
+async function editSite(x, arg) {
+  const [{ clients }, { projects }] = await Promise.all([api('admin/clients'), api('admin/projects')]);
+  let pre = { kind: 'client', status: 'live', monitor: 1, hosting: 'Cloudflare Worker' };
+  if (!x && arg) {
+    if (arg.startsWith('w:')) { const w = arg.slice(2); pre = { ...pre, name: w.replace(/-/g, ' ').replace(/^./, c => c.toUpperCase()), worker: w, url: `https://${w}.demositeforyou.workers.dev/`, status: 'demo', kind: 'demo' }; }
+    else { const p = projects.find(q => q.id === arg); if (p) pre = { ...pre, name: (p.client_business || p.client_name || p.title).replace(/ website$/, ''), project_id: p.id, client_id: p.client_id, plan: p.package, allowance_min: { Business: 60, Premium: 120 }[p.package] || 0 }; }
+  }
+  const f = form([
+    { k: 'name', label: 'Site name', placeholder: 'e.g. Spitfire Comedy' },
+    { k: 'url', label: 'Website address', type: 'url', placeholder: 'https://', hint: 'Checked every 15 minutes.' },
+    { k: 'admin_url', label: 'Its admin page', type: 'url', placeholder: 'https://…/admin' },
+    { k: 'kind', label: 'Type', type: 'select', options: Object.entries(KIND) },
+    { k: 'status', label: 'Status', type: 'select', options: Object.entries(SITE_STATUS).map(([k, v]) => [k, v[0]]) },
+    { k: 'client_id', label: 'Client', type: 'select', options: [['', 'None']].concat(clients.map(c => [c.id, c.business || c.name])) },
+    { k: 'project_id', label: 'Project', type: 'select', options: [['', 'None']].concat(projects.map(p => [p.id, p.title])) },
+    { k: 'hosting', label: 'Hosting', type: 'select', options: [['', 'Not set'], ['Cloudflare Worker', 'Cloudflare Worker'], ['Cloudflare Pages', 'Cloudflare Pages'], ['GitHub Pages', 'GitHub Pages'], ['Other', 'Other']] },
+    { k: 'worker', label: 'Cloudflare Worker name', placeholder: 'e.g. spitfire-comedy' },
+    { k: 'repo', label: 'GitHub repo', placeholder: 'owner/name' },
+    { k: 'domain', label: 'Domain', placeholder: 'e.g. spitfirecomedy.co.uk' }, { k: 'renews', label: 'Domain renews on', type: 'date' },
+    { k: 'plan', label: 'Care plan', type: 'select', options: [['', 'Not set'], ['None', 'No plan'], ['Starter', 'Starter'], ['Business', 'Business'], ['Premium', 'Premium'], ['Custom', 'Custom']] },
+    { k: 'allowance_min', label: 'Change time included a month (minutes)', type: 'number', hint: 'Business 60, Premium 120.' },
+    { k: 'monitor', label: 'Check it is up', type: 'select', options: [[1, 'Yes, every 15 minutes'], [0, 'No']] },
+    { k: 'notes', label: 'Notes', type: 'textarea', placeholder: 'Logins live in your password manager, not here.' }
+  ], x || pre, { title: x ? 'Edit site' : 'Add a site', submit: x ? 'Save' : 'Add site', onCancel: () => x ? route() : history.back(),
+    onSave: async v => { v.monitor = Number(v.monitor); if (x) { await api('admin/sites/' + x.id, { method: 'PATCH', body: v }); toast('Saved'); route(); } else { const r = await api('admin/sites', { method: 'POST', body: v }); toast('Site added. Checking it now'); await api('admin/sites/' + r.id + '/check', { method: 'POST' }).catch(() => {}); go('site/' + r.id); } } });
+  f.els.plan.addEventListener('change', () => { const a = { Business: 60, Premium: 120 }[f.els.plan.value]; if (a && !Number(f.els.allowance_min.value)) f.els.allowance_min.value = a; });
+  render(pageHead('Hub', x ? x.name : 'Add a site', x ? null : 'Add any website you build or look after. Never put passwords here: keep logins in a password manager.', null, x ? ['site/' + x.id, 'Back'] : ['sites', 'Sites']), f.el);
 }
 
 /* ================= visitors ================= */
