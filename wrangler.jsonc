@@ -1,0 +1,21 @@
+{
+  // NEMORA inbox: receives nemora.uk contact-form messages and serves the private admin at /admin.
+  // No secrets in this file. Set SETUP_CODE (and optionally RESEND_API_KEY) as secrets in Cloudflare.
+  "name": "nemora-inbox",
+  "main": "src/worker.js",
+  "compatibility_date": "2025-09-01",
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": true,
+    "not_found_handling": "none",
+    "html_handling": "auto-trailing-slash"
+  },
+  "kv_namespaces": [
+    { "binding": "KV","id": "82378f21b57241db9e748c0a30aa112d" }
+  ],
+  "vars": {
+    "SITE_ORIGINS": "https://nemora.uk,https://www.nemora.uk"
+  },
+  "observability": { "enabled": true }
+}

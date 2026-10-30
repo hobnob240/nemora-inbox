@@ -1,0 +1,21 @@
+{
+  "name": "nemora-inbox",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.40.0"
+  },
+  "cloudflare": {
+    "bindings": {
+      "SETUP_CODE": {
+        "description": "Make up any phrase of 8 or more characters (for example three random words). You type it once at /admin to create your login. Keep it private."
+      },
+      "KV": {
+        "description": "Storage for messages and the admin login. Leave as \"Create new\"."
+      }
+    }
+  }
+}

@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#13151d">
+<title>Admin login | NEMORA</title>
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="stylesheet" href="/admin/admin.css?v=1">
+<script src="/admin/login.js?v=1" defer></script>
+</head>
+<body class="auth-body">
+<div class="auth">
+  <div class="auth-card">
+    <img class="logo" src="/assets/logo-h.png" alt="NEMORA" width="416" height="96">
+
+    <form id="login" hidden novalidate>
+      <h1>Admin login</h1>
+      <p class="sub">Read and reply to messages from nemora.uk.</p>
+      <div id="login-msg" class="msg err" role="alert" hidden></div>
+      <div class="field"><label for="l-user">Username</label><input id="l-user" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" required></div>
+      <div class="field"><label for="l-pass">Password</label><div class="pw-wrap"><input id="l-pass" name="password" type="password" autocomplete="current-password" required><button type="button" data-show="l-pass">Show</button></div></div>
+      <button class="btn btn-gold" type="submit">Log in</button>
+    </form>
+
+    <form id="setup" hidden novalidate>
+      <h1>Set up your login</h1>
+      <p class="sub">This only happens once. Enter the setup code you added in Cloudflare, then choose a username and password.</p>
+      <div id="setup-msg" class="msg err" role="alert" hidden></div>
+      <div class="field"><label for="s-code">Setup code</label><input id="s-code" autocomplete="off" autocapitalize="none" spellcheck="false" required></div>
+      <div class="field"><label for="s-user">Choose a username</label><input id="s-user" autocomplete="username" autocapitalize="none" spellcheck="false" required></div>
+      <div class="field"><label for="s-pass">Choose a password</label><span class="hint">At least 12 characters. Three or four random words works well.</span><div class="pw-wrap"><input id="s-pass" type="password" autocomplete="new-password" required><button type="button" data-show="s-pass">Show</button></div></div>
+      <button class="btn btn-gold" type="submit">Create login</button>
+    </form>
+
+    <div id="nocode" hidden>
+      <h1>One step left</h1>
+      <p class="sub">Before you can create your login, add a secret called <strong>SETUP_CODE</strong> in Cloudflare (Workers, nemora-inbox, Settings, Variables and secrets). Use any phrase of 8 or more characters, then reload this page.</p>
+    </div>
+    <p id="loading" class="sub">Loading…</p>
+  </div>
+</div>
+</body>
+</html>
