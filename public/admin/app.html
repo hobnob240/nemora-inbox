@@ -4,24 +4,36 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
-<meta name="theme-color" content="#13151d">
-<title>Inbox | NEMORA admin</title>
+<meta name="theme-color" content="#101219">
+<meta name="color-scheme" content="light dark">
+<title>NEMORA admin</title>
 <link rel="icon" href="/favicon.ico" sizes="any">
-<link rel="stylesheet" href="/admin/admin.css?v=2">
-<script src="/admin/app.js?v=2" type="module"></script>
+<link rel="apple-touch-icon" href="/assets/favicon-96.png">
+<link rel="preload" href="/assets/fonts/serif.woff" as="font" type="font/woff" crossorigin>
+<link rel="stylesheet" href="/admin/admin.css?v=3">
+<script src="/admin/app.js?v=3" type="module"></script>
 </head>
 <body>
-<div class="app">
-  <header class="top">
-    <div class="top-row">
-      <img class="logo" src="/assets/logo-h.png" alt="NEMORA" width="416" height="96">
-      <div class="grow"></div>
-      <a class="view" href="https://nemora.uk/" target="_blank" rel="noopener">View website</a>
+<div class="shell">
+  <aside class="side" aria-label="Main">
+    <img class="logo" src="/assets/logo-h.png" alt="NEMORA" width="416" height="96">
+    <nav id="side-nav"></nav>
+    <div class="me">
+      <span class="avatar" id="me-avatar" aria-hidden="true"></span>
+      <span class="who"><strong id="me-name"></strong><span>Owner</span></span>
+      <button class="icon-btn" id="logout-side" type="button" aria-label="Log out" title="Log out"></button>
     </div>
-  </header>
-  <nav class="tabs" id="tabs" role="tablist" aria-label="Admin sections"></nav>
-  <main id="view" tabindex="-1"><p class="muted">Loading…</p></main>
+  </aside>
+  <div class="content">
+    <header class="topbar">
+      <img class="logo" src="/assets/logo-h.png" alt="NEMORA" width="416" height="96">
+      <span class="grow"></span>
+      <button class="icon-btn" id="menu-btn" type="button" aria-label="More" aria-expanded="false" aria-haspopup="true"></button>
+      <div class="menu" id="menu" hidden></div>
+    </header>
+    <main id="view" tabindex="-1"></main>
+  </div>
+  <nav class="tabbar" id="tabbar" aria-label="Main"></nav>
 </div>
-<div class="toast" id="toast" role="status" hidden></div>
 </body>
 </html>

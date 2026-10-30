@@ -13,6 +13,8 @@
 // country. Unique visitors are counted with a hash of IP + browser + a random salt that changes every day; the IP
 // itself is never stored and the hash can't be linked across days or back to a person. Rows are kept 13 months.
 
+import { adminBiz } from './biz.js';
+
 const SESSION_TTL = 8 * 60 * 60;
 const COOKIE = '__Host-nemora_admin';
 const MAX_FAILS = 5, LOCK_SECONDS = 15 * 60;
@@ -254,6 +256,14 @@ async function adminApi(req, env, path, m, s) {
     await log(env, req, s.u, 'Logged out all other devices');
     return json({ ok: true }, 200, { 'Set-Cookie': cookie });
   }
+  let extra = {};
+  if (path === 'dashboard' && m === 'GET') {
+    const [msgs, t] = await Promise.all([listMessages(env), traffic(env, 7)]);
+    extra = { unread: msgs.filter(e => e.status === 'new').length, latestMessages: msgs.filter(e => e.status !== 'archived').slice(0, 4),
+      visitors: t.enabled ? { week: t.totals.visitors || 0, prev: t.previous.visitors || 0, views: t.totals.views || 0, live: t.live, series: t.series, from: t.from } : null };
+  }
+  const biz = await adminBiz(req, env, path, m, readJson, action => log(env, req, s.u, action), s.u, extra);
+  if (biz) return biz;
   return json({ error: 'Not found.' }, 404);
 }
 async function putMsg(env, rec) {

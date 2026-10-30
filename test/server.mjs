@@ -20,7 +20,7 @@ import { DatabaseSync } from 'node:sqlite';
 const sql = new DatabaseSync(':memory:');
 sql.exec("CREATE TABLE hits (id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, day TEXT NOT NULL, path TEXT NOT NULL, ref TEXT NOT NULL DEFAULT '', device TEXT NOT NULL DEFAULT '', country TEXT NOT NULL DEFAULT '', visitor TEXT NOT NULL, kind TEXT NOT NULL DEFAULT 'view')");
 const stmt = (q, a = []) => ({ q, bind: (...b) => stmt(q, b), async first() { return sql.prepare(q).get(...a) || null; }, async all() { return { results: sql.prepare(q).all(...a) }; }, async run() { sql.prepare(q).run(...a); return { success: true }; } });
-const DB = { prepare: q => stmt(q), async batch(list) { return Promise.all(list.map(x => /^\s*(CREATE|INSERT|DELETE)/i.test(x.q) ? x.run() : x.all())); } };
+const DB = { prepare: q => stmt(q), async batch(list) { const out = []; for (const x of list) out.push(/^\s*(SELECT|WITH)/i.test(x.q) ? await x.all() : (await x.run(), { results: [] })); return out; } };
 globalThis.__testDB = sql;
 const env = { KV, ASSETS, DB, SETUP_CODE: process.env.SETUP_CODE ?? 'test setup phrase', SITE_ORIGINS: process.env.SITE_ORIGINS || 'https://nemora.uk,http://localhost:8795' };
 const PORT = +process.env.PORT || 8801;
@@ -30,6 +30,7 @@ http.createServer(async (req, res) => {
   headers.set('cf-connecting-ip', req.headers['x-test-ip'] || '127.0.0.1');
   const r = new Request('http://localhost:' + PORT + req.url, { method: req.method, headers, body: ['GET', 'HEAD'].includes(req.method) ? undefined : Buffer.concat(chunks) });
   Object.defineProperty(r, 'cf', { value: { country: req.headers['x-test-country'] || 'GB' } });
+  if (req.url === '/__sql') { try { sql.exec(Buffer.concat(chunks).toString()); res.end('ok'); } catch (e) { res.statusCode = 500; res.end(String(e)); } return; }
   if (req.url === '/__seed' ) { const now = Date.now(); for (let i = 0; i < 400; i++) { const t = now - Math.floor(Math.random() * 40) * 86400000; sql.prepare("INSERT INTO hits (ts, day, path, ref, device, country, visitor, kind) VALUES (?,?,?,?,?,?,?,?)").run(t, new Date(t).toISOString().slice(0, 10), ['/', '/services.html', '/contact.html', '/work.html', '/guides/how-much-does-a-website-cost.html'][i % 5], ['', 'google.com', 'facebook.com', '', 'bing.com'][i % 5 === 1 ? 1 : i % 7 === 0 ? 2 : i % 11 === 0 ? 4 : 0], ['Phone', 'Phone', 'Desktop', 'Tablet'][i % 4], ['GB', 'GB', 'GB', 'US', 'IE'][i % 5], 'v' + (i % 90), i % 37 === 0 ? 'enquiry' : 'view'); } res.end('seeded'); return; }
   const out = await worker.fetch(r, env, { waitUntil() {} });
   const h = {}; out.headers.forEach((v, k) => { if (k === 'set-cookie') return; h[k] = v; });
