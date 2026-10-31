@@ -22,7 +22,7 @@ sql.exec("CREATE TABLE hits (id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NO
 const stmt = (q, a = []) => ({ q, bind: (...b) => stmt(q, b), async first() { return sql.prepare(q).get(...a) || null; }, async all() { return { results: sql.prepare(q).all(...a) }; }, async run() { sql.prepare(q).run(...a); return { success: true }; } });
 const DB = { prepare: q => stmt(q), async batch(list) { const out = []; for (const x of list) out.push(/^\s*(SELECT|WITH)/i.test(x.q) ? await x.all() : (await x.run(), { results: [] })); return out; } };
 globalThis.__testDB = sql;
-const env = { KV, ASSETS, DB, SETUP_CODE: process.env.SETUP_CODE ?? 'test setup phrase', SITE_ORIGINS: process.env.SITE_ORIGINS || 'https://nemora.uk,http://localhost:8795' };
+const env = { KV, ASSETS, DB, META_PAGE_TOKEN: process.env.META_PAGE_TOKEN ?? 'test-token', META_API_BASE: 'http://localhost:8802', MEDIA_ORIGIN: 'https://nemora.uk/social/', SETUP_CODE: process.env.SETUP_CODE ?? 'test setup phrase', SITE_ORIGINS: process.env.SITE_ORIGINS || 'https://nemora.uk,http://localhost:8795' };
 const PORT = +process.env.PORT || 8801;
 http.createServer(async (req, res) => {
   const chunks = []; for await (const c of req) chunks.push(c);
@@ -30,6 +30,7 @@ http.createServer(async (req, res) => {
   headers.set('cf-connecting-ip', req.headers['x-test-ip'] || '127.0.0.1');
   const r = new Request('http://localhost:' + PORT + req.url, { method: req.method, headers, body: ['GET', 'HEAD'].includes(req.method) ? undefined : Buffer.concat(chunks) });
   Object.defineProperty(r, 'cf', { value: { country: req.headers['x-test-country'] || 'GB' } });
+  if (req.url === '/__cron') { const { publishDue } = await import(path.join(ROOT, 'src/social.js')); res.end(JSON.stringify(await publishDue(env))); return; }
   if (req.url === '/__sql') { try { sql.exec(Buffer.concat(chunks).toString()); res.end('ok'); } catch (e) { res.statusCode = 500; res.end(String(e)); } return; }
   if (req.url === '/__seed' ) { const now = Date.now(); for (let i = 0; i < 400; i++) { const t = now - Math.floor(Math.random() * 40) * 86400000; sql.prepare("INSERT INTO hits (ts, day, path, ref, device, country, visitor, kind) VALUES (?,?,?,?,?,?,?,?)").run(t, new Date(t).toISOString().slice(0, 10), ['/', '/services.html', '/contact.html', '/work.html', '/guides/how-much-does-a-website-cost.html'][i % 5], ['', 'google.com', 'facebook.com', '', 'bing.com'][i % 5 === 1 ? 1 : i % 7 === 0 ? 2 : i % 11 === 0 ? 4 : 0], ['Phone', 'Phone', 'Desktop', 'Tablet'][i % 4], ['GB', 'GB', 'GB', 'US', 'IE'][i % 5], 'v' + (i % 90), i % 37 === 0 ? 'enquiry' : 'view'); } res.end('seeded'); return; }
   const out = await worker.fetch(r, env, { waitUntil() {} });

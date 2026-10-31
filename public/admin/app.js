@@ -29,6 +29,8 @@ const ICONS = {
   sites: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z|M2 12h20|M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z',
   github: 'M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22',
   cloud: 'M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z',
+  social: 'M18 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6z|M6 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z|M18 22a3 3 0 1 0 0-6 3 3 0 0 0 0 6z|M8.59 13.51l6.83 3.98|M15.41 6.51l-6.82 3.98',
+  play: 'M5 3l14 9-14 9V3z',
   refresh: 'M23 4v6h-6|M1 20v-6h6|M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15',
   settings: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z|M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z',
   more: 'M12 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2z|M19 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2z|M5 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2z',
@@ -147,16 +149,18 @@ const tag = (map, k) => pill((map[k] || [k])[0], (map[k] || [])[1]);
 
 /* ================= shell ================= */
 const NAV = [['home', 'Home'], ['inbox', 'Inbox'], ['leads', 'Leads'], ['sites', 'Sites'], ['work', 'Work'], ['money', 'Money']];
+const SIDE = [['home', 'Home'], ['inbox', 'Inbox'], ['leads', 'Leads'], ['social', 'Social'], ['sites', 'Sites'], ['work', 'Work'], ['money', 'Money']];
 const NAV_MORE = [['visitors', 'Visitors'], ['settings', 'Settings']];
-const SECTION = { sites: 'sites', site: 'sites', inbox: 'inbox', leads: 'leads', lead: 'leads', work: 'work', project: 'work', client: 'work', clients: 'work', money: 'money', invoice: 'money', visitors: 'visitors', settings: 'settings', activity: 'settings', home: 'home' };
-const TITLES = { sites: 'Sites', home: 'Home', inbox: 'Inbox', leads: 'Leads', work: 'Work', money: 'Money', visitors: 'Visitors', settings: 'Settings' };
+const MENU = [['social', 'Social'], ['visitors', 'Visitors'], ['settings', 'Settings']];
+const SECTION = { social: 'social', post: 'social', sites: 'sites', site: 'sites', inbox: 'inbox', leads: 'leads', lead: 'leads', work: 'work', project: 'work', client: 'work', clients: 'work', money: 'money', invoice: 'money', visitors: 'visitors', settings: 'settings', activity: 'settings', home: 'home' };
+const TITLES = { social: 'Social', sites: 'Sites', home: 'Home', inbox: 'Inbox', leads: 'Leads', work: 'Work', money: 'Money', visitors: 'Visitors', settings: 'Settings' };
 let me = { username: '', unread: 0 };
 function shell() {
-  $('#side-nav').replaceChildren(...NAV.map(([k, l]) => h('a', { href: '#' + k, 'data-k': k }, icon(k), l, k === 'inbox' ? h('span', { class: 'count', hidden: true }) : null)), h('div', { class: 'sep' }), ...NAV_MORE.map(([k, l]) => h('a', { href: '#' + k, 'data-k': k }, icon(k), l)));
+  $('#side-nav').replaceChildren(...SIDE.map(([k, l]) => h('a', { href: '#' + k, 'data-k': k }, icon(k), l, k === 'inbox' ? h('span', { class: 'count', hidden: true }) : null)), h('div', { class: 'sep' }), ...NAV_MORE.map(([k, l]) => h('a', { href: '#' + k, 'data-k': k }, icon(k), l)));
   $('#tabbar').replaceChildren(...NAV.map(([k, l]) => h('a', { href: '#' + k, 'data-k': k }, icon(k), l, k === 'inbox' ? h('span', { class: 'dot', hidden: true }) : null)));
   $('#me-name').textContent = me.username; $('#me-avatar').textContent = initials(me.username);
   const menu = $('#menu'), btn = $('#menu-btn');
-  menu.replaceChildren(...NAV_MORE.map(([k, l]) => h('a', { href: '#' + k }, icon(k), l)), h('a', { href: 'https://nemora.uk/', target: '_blank', rel: 'noopener' }, icon('link'), 'View website'), h('button', { type: 'button', onclick: logout }, icon('logout'), 'Log out'));
+  menu.replaceChildren(...MENU.map(([k, l]) => h('a', { href: '#' + k }, icon(k), l)), h('a', { href: 'https://nemora.uk/', target: '_blank', rel: 'noopener' }, icon('link'), 'View website'), h('button', { type: 'button', onclick: logout }, icon('logout'), 'Log out'));
   btn.replaceChildren(icon('more')); $('#logout-side').replaceChildren(icon('logout'));
   btn.onclick = e => { e.stopPropagation(); menu.hidden = !menu.hidden; btn.setAttribute('aria-expanded', String(!menu.hidden)); };
   document.addEventListener('click', e => { if (!menu.hidden && !menu.contains(e.target)) { menu.hidden = true; btn.setAttribute('aria-expanded', 'false'); } });
@@ -183,6 +187,7 @@ async function route() {
     home: showHome, inbox: id ? () => showMessage(id) : showInbox, leads: showLeads, lead: () => showLead(id),
     work: () => showWork('projects'), clients: () => showWork('clients'),
     project: () => id === 'new' ? editProject(null, extra) : showProject(id), client: () => id === 'new' ? editClient(null) : showClient(id),
+    social: showSocial, post: () => showPost(id),
     sites: showSites, site: () => id === 'new' ? editSite(null, extra) : showSite(id),
     money: showMoney, invoice: () => id === 'new' ? editInvoice(null, extra) : showInvoice(id),
     visitors: showTraffic, settings: showSettings, activity: showActivity
@@ -205,6 +210,9 @@ async function showHome() {
   for (const i of d.overdue) todo.push(['#invoice/' + i.id, 'alert', 'bad', `${i.business || i.name || 'A client'} owes ${money(i.total_pence)}`, `Invoice ${i.number} was due ${day(i.due)}`]);
   for (const l of d.hotLeads) todo.push(['#lead/' + l.id, 'star', 'ok', `${l.name} ${l.status === 'interested' ? 'is interested' : 'replied'}`, l.next || [l.type, l.area].filter(Boolean).join(' · ')]);
   for (const p of d.dueSoon) todo.push(['#project/' + p.id, 'clock', p.due < d.today ? 'bad' : '', `${p.title} ${p.due < d.today ? 'was due' : 'is due'} ${day(p.due)}`, (STAGE[p.stage] || [p.stage])[0]]);
+  const so = d.social || {};
+  if (so.needs_approval) todo.unshift(['#social', 'play', '', plural(so.needs_approval, 'video') + ' waiting for your OK', 'Social posts for Facebook and Instagram']);
+  if (so.failed) todo.unshift(['#social', 'alert', 'bad', plural(so.failed, 'social post') + ' failed to publish', 'Open Social to see why']);
   for (const x of (d.sites || {}).down || []) todo.unshift(['#site/' + x.id, 'alert', 'bad', `${x.name} is down`, x.since ? 'Since ' + when(x.since) : 'Not answering']);
   for (const x of (d.sites || {}).renewing || []) todo.push(['#site/' + x.id, 'clock', x.renews < d.today ? 'bad' : '', `${x.name}: domain renews ${day(x.renews)}`, 'Renew it so the site stays online']);
   if (d.report && d.report.date === d.today) for (const n of d.report.needs_you || []) todo.push([null, 'check', '', n, 'From today\'s outreach report']);
@@ -596,6 +604,82 @@ async function showInvoice(id) {
     sheet);
 }
 
+/* ================= social ================= */
+const SP = { needs_approval: ['Needs your OK', 'warn'], approved: ['Scheduled', 'info'], publishing: ['Going out', 'info'], posted: ['Posted', 'ok'], rejected: ['Sent back', ''], failed: ['Failed', 'bad'], draft: ['Draft', ''] };
+const at = iso => new Date(iso).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+const SK = { image: 'Photo', carousel: 'Carousel', reel: 'Video', text: 'Text' };
+const plat = p => p.split(',').map(x => x === 'fb' ? 'Facebook' : 'Instagram').join(' · ');
+let socialFilter = 'needs';
+const localInput = iso => { const d = new Date(iso || Date.now()); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16); };
+function preview(p, big) {
+  const m = p.media || [];
+  if (p.kind === 'reel' && m[0]) return big ? h('video', { class: 'pv', src: m[0], controls: true, playsinline: true, preload: 'metadata' }) : h('div', { class: 'pv pv-video' }, h('video', { src: m[0] + '#t=0.5', muted: true, playsinline: true, preload: 'metadata' }), h('span', { class: 'pv-badge' }, icon('play'), 'Video'));
+  if (m.length) return big ? h('div', { class: 'pv-row' }, m.map(u => h('img', { src: u, alt: '', loading: 'lazy' }))) : h('div', { class: 'pv' }, h('img', { src: m[0], alt: '', loading: 'lazy' }), m.length > 1 ? h('span', { class: 'pv-badge' }, '1 of ' + m.length) : null);
+  return h('div', { class: 'pv pv-text' }, h('p', {}, (p.caption || '').slice(0, 140)));
+}
+async function showSocial() {
+  const [{ posts, now }, conn] = await Promise.all([api('admin/social'), api('admin/social/connection').catch(() => ({ connected: false, reason: 'missing' }))]);
+  const groups = { needs: x => x.status === 'needs_approval', scheduled: x => ['approved', 'publishing'].includes(x.status), posted: x => x.status === 'posted', back: x => x.status === 'rejected', failed: x => x.status === 'failed', all: () => true };
+  if (socialFilter === 'needs' && !posts.some(groups.needs)) socialFilter = posts.some(groups.scheduled) ? 'scheduled' : 'all';
+  const list = posts.filter(groups[socialFilter] || groups.all);
+  const week = posts.filter(x => x.status === 'posted' && x.posted_at > new Date(Date.now() - 7 * 864e5).toISOString()).length;
+  render(
+    pageHead('Social', 'Facebook and Instagram', 'Your social media agent plans three posts a week from real work. Videos wait for your OK; photos and text go out on their own once they pass the playbook.'),
+    connCard(conn),
+    h('div', { class: 'tiles' },
+      tile('Waiting for you', num(posts.filter(groups.needs).length), 'videos to approve', posts.some(groups.needs) ? 'hero' : ''),
+      tile('Scheduled', num(posts.filter(groups.scheduled).length), (() => { const n = posts.filter(groups.scheduled).sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at))[0]; return n ? 'Next ' + at(n.scheduled_at) : 'Nothing queued'; })()),
+      tile('Posted this week', num(week), plural(posts.filter(groups.posted).length, 'post') + ' in total'),
+      tile('Failed', num(posts.filter(groups.failed).length), posts.some(groups.failed) ? h('span', { class: 'delta down' }, 'Open them to see why') : 'none')),
+    chipsRow([['needs', 'Needs your OK', posts.filter(groups.needs).length], ['scheduled', 'Scheduled', posts.filter(groups.scheduled).length], ['posted', 'Posted', posts.filter(groups.posted).length], ['back', 'Sent back', posts.filter(groups.back).length], ['failed', 'Failed', posts.filter(groups.failed).length], ['all', 'All', posts.length]].filter(([k, , n]) => n || k === 'all' || k === socialFilter), socialFilter, k => { socialFilter = k; showSocial(); }),
+    list.length ? h('div', { class: 'post-grid' }, list.map(p => h('a', { class: 'post-card', href: '#post/' + p.id }, preview(p),
+      h('div', { class: 'post-meta' }, h('div', { class: 'item-top' }, tag(SP, p.status), h('span', { class: 'when' }, SK[p.kind] + ' · ' + (p.status === 'posted' ? 'posted ' + day(p.posted_at) : p.scheduled_at ? at(p.scheduled_at) : 'not scheduled'))),
+        h('p', { class: 'x' }, p.caption), h('span', { class: 'small muted' }, plat(p.platforms))))))
+      : empty('Nothing here yet', posts.length ? null : 'Your social media agent fills this up. Its first run plans the week\'s posts.'));
+}
+function connCard(c) {
+  if (c.connected) return h('div', { class: 'card' }, h('div', { class: 'status-line' }, h('span', { class: 'hdot up' }), h('div', {}, h('strong', {}, 'Connected to ' + (c.pageName || 'your Facebook Page')), h('span', { class: 'small muted' }, c.igConnected ? 'Instagram: @' + c.igName : 'Instagram isn\'t linked to the Page yet, so only Facebook posts go out'))));
+  return card('Connect Facebook and Instagram', [
+    c.reason === 'error' ? h('div', { class: 'msg err' }, 'Meta said: ' + c.error) : h('p', { class: 'small muted' }, 'Posts are queued safely until this is done. You only need to do it once, from a computer. No password is ever stored: just a Page token, kept as a Cloudflare secret.'),
+    h('ol', { class: 'small steps-list' },
+      h('li', {}, 'Make sure NEMORA\'s Instagram is a Business account and is linked to the NEMORA Facebook Page (Instagram app: Settings, Account type and tools).'),
+      h('li', {}, 'Go to developers.facebook.com, choose Create app, pick "Other", then "Business". Name it NEMORA Social.'),
+      h('li', {}, 'Open Tools, then Graph API Explorer. Choose your app, then add these permissions: pages_show_list, pages_read_engagement, pages_manage_posts, instagram_basic, instagram_content_publish, business_management. Press Generate Access Token and allow it for the NEMORA Page.'),
+      h('li', {}, 'In Explorer, change "User Token" to the NEMORA Page so it shows a Page token. Open the Access Token Debugger (the blue i), press Extend Access Token, then use that longer token to get a Page token that doesn\'t expire.'),
+      h('li', {}, 'In Cloudflare: Workers, nemora-inbox, Settings, Variables and secrets. Add a Secret called META_PAGE_TOKEN and paste the Page token. Save.'),
+      h('li', {}, 'Come back here and refresh. It should say Connected.')),
+    h('p', { class: 'small muted' }, 'Stuck on a step? Ask Claude and send a screenshot (never the token itself).')]);
+}
+async function showPost(id) {
+  const { post: p } = await api('admin/social/' + id);
+  const editable = !['posted', 'publishing'].includes(p.status);
+  const cap = h('textarea', { rows: 8, 'aria-label': 'Caption', disabled: !editable }, p.caption);
+  const count = h('span', { class: 'small muted' }); const upd = () => count.textContent = `${cap.value.length} / 2,200 · ${(cap.value.match(/#[\p{L}\p{N}_]+/gu) || []).length} hashtags`; cap.addEventListener('input', upd); upd();
+  const atIn = h('input', { type: 'datetime-local', value: localInput(p.scheduled_at), 'aria-label': 'When', disabled: !editable });
+  const where = h('select', { 'aria-label': 'Where', disabled: !editable }, [['fb,ig', 'Facebook and Instagram'], ['fb', 'Facebook only'], ['ig', 'Instagram only']].map(([v, l]) => h('option', { value: v, selected: v === p.platforms }, l)));
+  const note = h('textarea', { rows: 3, placeholder: 'What should change? Your agent reads this before its next run.' }, p.feedback || '');
+  const back = h('div', { class: 'confirm', hidden: true }, 'Send it back to your agent with a note:', note, h('div', { class: 'actions' }, h('button', { class: 'btn btn-danger', onclick: async () => { if (await act(() => api('admin/social/' + id + '/reject', { method: 'POST', body: { feedback: note.value } }), 'Sent back')) go('social'); } }, 'Send back'), h('button', { class: 'btn', onclick: () => back.hidden = true }, 'Cancel')));
+  const del = confirmBox('Delete this post? It hasn\'t gone out.', 'Delete', async () => { if (await act(() => api('admin/social/' + id, { method: 'DELETE' }), 'Deleted')) go('social'); });
+  const save = () => api('admin/social/' + id, { method: 'PATCH', body: { caption: cap.value, scheduled_at: new Date(atIn.value).toISOString(), platforms: where.value } });
+  render(
+    pageHead(SK[p.kind] + ' · ' + plat(p.platforms), p.status === 'posted' ? 'Posted ' + day(p.posted_at) : p.status === 'needs_approval' ? 'Waiting for your OK' : (SP[p.status] || [p.status])[0], null, [tag(SP, p.status)], ['social', 'Social']),
+    p.error ? h('div', { class: 'msg err' }, (p.status === 'failed' ? 'It couldn\'t be posted: ' : 'Last try didn\'t work, it will try again: ') + p.error) : null,
+    p.status === 'rejected' && p.feedback ? h('div', { class: 'msg' }, 'Your note: ' + p.feedback) : null,
+    h('div', { class: 'grid side-r' },
+      h('div', { class: 'grid' }, card(null, preview(p, true)),
+        p.idea ? card('Why this post, and where the facts came from', h('p', { class: 'prose small' }, p.idea)) : null),
+      h('div', { class: 'grid' },
+        card('Caption', [cap, count]),
+        card('When and where', [h('div', { class: 'fields' }, h('div', { class: 'field' }, h('label', {}, 'Goes out'), atIn), h('div', { class: 'field' }, h('label', {}, 'Where'), where)),
+          editable ? h('div', { class: 'actions' }, h('button', { class: 'btn btn-sm', onclick: () => act(save, 'Saved') }, 'Save changes')) : null]),
+        p.status === 'posted' ? card('Live', h('div', { class: 'actions' }, safeHref(p.fb_url) ? h('a', { class: 'btn', href: p.fb_url, target: '_blank', rel: 'noopener noreferrer' }, icon('link'), 'On Facebook') : null, safeHref(p.ig_url) ? h('a', { class: 'btn', href: p.ig_url, target: '_blank', rel: 'noopener noreferrer' }, icon('link'), 'On Instagram') : null))
+          : card(null, [h('div', { class: 'actions' },
+            p.status === 'needs_approval' || p.status === 'rejected' || p.status === 'failed' ? h('button', { class: 'btn btn-gold', onclick: async () => { if (editable) await act(save); if (await act(() => api('admin/social/' + id + '/approve', { method: 'POST' }), 'Approved. It goes out ' + (new Date(atIn.value) > new Date() ? at(new Date(atIn.value).toISOString()) : 'within 15 minutes'))) route(); } }, icon('check'), 'Approve') : null,
+            ['approved', 'failed'].includes(p.status) || (p.status === 'needs_approval' && false) ? h('button', { class: 'btn', onclick: async e => { e.target.disabled = true; const r = await act(() => api('admin/social/' + id + '/publish', { method: 'POST' }), 'Posting now'); if (r) route(); else e.target.disabled = false; } }, 'Post now') : null,
+            p.status !== 'rejected' && editable ? h('button', { class: 'btn btn-ghost', onclick: () => back.hidden = false }, 'Send back') : null,
+            editable ? h('button', { class: 'btn btn-ghost btn-danger', onclick: () => del.hidden = false }, icon('trash'), 'Delete') : null), back, del]))));
+}
+
 /* ================= sites hub ================= */
 const SITE_STATUS = { live: ['Live', 'ok'], building: ['Building', 'warn'], demo: ['Demo', 'info'], paused: ['Paused', ''], retired: ['Retired', ''] };
 const KIND = { client: 'Client site', own: 'Our own', demo: 'Demo' };
@@ -778,6 +862,8 @@ async function showSettings() {
     biz.el, acc,
     card('Outreach rulebook', rules ? [h('p', { class: 'small muted' }, `Version ${rules.version}, updated ${day(rules.updated)}. Your outreach assistant reads this before every run and never changes it itself. Ask Claude to change a rule.`),
       ...(rules.sections || []).map(sec => h('details', {}, h('summary', {}, sec.title), h('ul', { class: 'small' }, (sec.rules || []).map(r => h('li', {}, r)))))] : h('p', { class: 'muted small' }, 'Not loaded yet.')),
+    card('Social media playbook', rb.social ? [h('p', { class: 'small muted' }, `Version ${rb.social.version}, updated ${day(rb.social.updated)}. Your social media agent reads this before every run. Ask Claude to change a rule.`),
+      ...(rb.social.sections || []).map(sec => h('details', {}, h('summary', {}, sec.title), h('ul', { class: 'small' }, (sec.rules || []).map(r => h('li', {}, r)))))] : h('p', { class: 'muted small' }, 'Not set up yet.')),
     card('Privacy and security', h('ul', { class: 'small' },
       h('li', {}, 'Your password is stored only as a one-way hash. There are no passwords, keys or tokens in this page.'),
       h('li', {}, 'You stay logged in for 8 hours. Five wrong passwords lock logins for 15 minutes.'),

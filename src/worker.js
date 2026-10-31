@@ -9,6 +9,7 @@
 //   ALERT_TO        text    optional, where alerts go (default daniel@nemora.uk)
 //   ALERT_FROM      text    optional, a sender on a domain verified in Resend
 //   CF_API_TOKEN    secret  optional, read-only Cloudflare token (Workers Scripts: Read) to list every Worker in the Sites hub
+//   META_PAGE_TOKEN secret  optional, Facebook Page token so the social queue can publish (see src/social.js)
 //   CF_ACCOUNT_ID   text    optional, the Cloudflare account id that goes with CF_API_TOKEN
 //
 // Visit statistics (D1 binding DB): cookieless. Each page view stores the page, referring site, device type and
@@ -16,6 +17,7 @@
 // itself is never stored and the hash can't be linked across days or back to a person. Rows are kept 13 months.
 
 import { adminBiz, checkAllSites } from './biz.js';
+import { publishDue } from './social.js';
 
 const SESSION_TTL = 8 * 60 * 60;
 const COOKIE = '__Host-nemora_admin';
@@ -26,7 +28,7 @@ const PER_IP_HOUR = 5, PER_DAY = 200;           // spam limits
 const MSG_ID = /^\d{13}-[a-f0-9]{8}$/;
 const PACKAGES = ['starter', 'business', 'premium', 'bigger', ''];
 const NEEDS = ['A new website', 'A redesign of my current website', 'A booking, membership or payment system', 'Not sure yet'];
-const ADMIN_CSP = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'";
+const ADMIN_CSP = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https://nemora.uk; media-src https://nemora.uk; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'";
 
 export default {
   async fetch(request, env, ctx) {
@@ -38,6 +40,7 @@ export default {
     if (!env.DB) return;
     if (event.cron === '17 3 * * *') { ctx.waitUntil(env.DB.prepare('DELETE FROM hits WHERE ts < ?').bind(Date.now() - 400 * 86400000).run()); return; }
     ctx.waitUntil(checkAllSites(env).then(changes => Promise.all(changes.map(c => siteAlert(env, c)))).catch(e => console.error('site checks failed', e)));
+    ctx.waitUntil(publishDue(env).then(r => { if (r.length) console.log('social', JSON.stringify(r)); }).catch(e => console.error('social publish failed', e)));
   }
 };
 

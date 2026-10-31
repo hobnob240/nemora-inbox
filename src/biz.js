@@ -3,6 +3,8 @@
 // and every change must come from the admin's own origin. All input is validated against the field lists below;
 // SQL always uses bound parameters.
 
+import { adminSocial, SOCIAL_SCHEMA } from './social.js';
+
 export const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS leads (id TEXT PRIMARY KEY, name TEXT NOT NULL, type TEXT NOT NULL DEFAULT '', area TEXT NOT NULL DEFAULT '', country TEXT NOT NULL DEFAULT 'UK', status TEXT NOT NULL DEFAULT 'check', channel TEXT NOT NULL DEFAULT '', legal TEXT NOT NULL DEFAULT '', email TEXT NOT NULL DEFAULT '', phone TEXT NOT NULL DEFAULT '', website TEXT NOT NULL DEFAULT '', address TEXT NOT NULL DEFAULT '', socials TEXT NOT NULL DEFAULT '', reviews INTEGER NOT NULL DEFAULT 0, fit INTEGER NOT NULL DEFAULT 0, package TEXT NOT NULL DEFAULT '', pitch TEXT NOT NULL DEFAULT '', notes TEXT NOT NULL DEFAULT '', next TEXT NOT NULL DEFAULT '', source TEXT NOT NULL DEFAULT '', found TEXT NOT NULL DEFAULT '', vetted TEXT NOT NULL DEFAULT '', updated TEXT NOT NULL DEFAULT '')`,
   `CREATE TABLE IF NOT EXISTS outbox (id TEXT PRIMARY KEY, lead_id TEXT NOT NULL DEFAULT '', business TEXT NOT NULL DEFAULT '', to_email TEXT NOT NULL DEFAULT '', kind TEXT NOT NULL DEFAULT '', slot TEXT NOT NULL DEFAULT '', not_before TEXT NOT NULL DEFAULT '', subject TEXT NOT NULL DEFAULT '', body TEXT NOT NULL DEFAULT '', checks TEXT NOT NULL DEFAULT '', fit INTEGER NOT NULL DEFAULT 0, queued_at TEXT NOT NULL DEFAULT '')`,
@@ -21,7 +23,8 @@ export const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS checks (id INTEGER PRIMARY KEY AUTOINCREMENT, site_id TEXT NOT NULL, ts INTEGER NOT NULL, ok INTEGER NOT NULL, code INTEGER NOT NULL DEFAULT 0, ms INTEGER NOT NULL DEFAULT 0, error TEXT NOT NULL DEFAULT '')`,
   `CREATE INDEX IF NOT EXISTS checks_site ON checks(site_id, ts)`,
   `CREATE TABLE IF NOT EXISTS worklog (id INTEGER PRIMARY KEY AUTOINCREMENT, site_id TEXT NOT NULL, day TEXT NOT NULL, minutes INTEGER NOT NULL DEFAULT 0, kind TEXT NOT NULL DEFAULT 'change', what TEXT NOT NULL DEFAULT '', created TEXT NOT NULL DEFAULT '')`,
-  `CREATE INDEX IF NOT EXISTS worklog_site ON worklog(site_id, day)`
+  `CREATE INDEX IF NOT EXISTS worklog_site ON worklog(site_id, day)`,
+  ...SOCIAL_SCHEMA
 ];
 let ready = false;
 export async function ensureBizSchema(env) {
@@ -106,7 +109,7 @@ const plusDays = (iso, n) => { const d = new Date(iso + 'T12:00:00Z'); d.setUTCD
 // returns a Response, or null if the path isn't a business route
 export async function adminBiz(req, env, path, m, readJson, log, user, extra) {
   const parts = path.split('/'), [res, id, sub] = parts;
-  if (!['dashboard', 'leads', 'outbox', 'clients', 'projects', 'invoices', 'reports', 'settings', 'rulebook', 'sites', 'worklog', 'cf'].includes(res)) return null;
+  if (!['dashboard', 'leads', 'outbox', 'clients', 'projects', 'invoices', 'reports', 'settings', 'rulebook', 'sites', 'worklog', 'cf', 'social'].includes(res)) return null;
   if (!env.DB) return reply({ error: 'The database is not connected. Add the D1 binding called DB in Cloudflare.' }, 503);
   await ensureBizSchema(env);
   try {
@@ -121,10 +124,11 @@ export async function adminBiz(req, env, path, m, readJson, log, user, extra) {
     if (res === 'projects') return await projects(env, id, m, body, log);
     if (res === 'invoices') return await invoices(env, id, m, body, log);
     if (res === 'reports' && m === 'GET') return reply({ reports: (await all(env, 'SELECT * FROM reports ORDER BY date DESC, type LIMIT 60')).map(r => ({ ...r, needs_you: parseJSON(r.needs_you, []), highlights: parseJSON(r.highlights, []) })) });
+    if (res === 'social') return await adminSocial(req, env, id, sub, m, body, log);
     if (res === 'sites') return await sites(env, id, sub, m, body, log);
     if (res === 'worklog' && id && m === 'DELETE') { await run(env, 'DELETE FROM worklog WHERE id = ?', Number(id) || 0); return reply({ ok: true }); }
     if (res === 'cf' && id === 'workers' && m === 'GET') return reply(await cfWorkers(env));
-    if (res === 'rulebook' && m === 'GET') return reply({ rulebook: await getConfig(env, 'rulebook', null), prospecting: await getConfig(env, 'prospecting', null) });
+    if (res === 'rulebook' && m === 'GET') return reply({ rulebook: await getConfig(env, 'rulebook', null), prospecting: await getConfig(env, 'prospecting', null), social: await getConfig(env, 'social_playbook', null) });
     if (res === 'settings') {
       if (m === 'GET') return reply({ business: await getConfig(env, 'business', {}) });
       if (m === 'PUT') {
@@ -145,7 +149,7 @@ export async function adminBiz(req, env, path, m, readJson, log, user, extra) {
 async function dashboard(env, { unread, visitors, latestMessages }) {
   const t = today(), ms = monthStart(), ws = weekStart(), soon = plusDays(t, 7), ys = t.slice(0, 4) + '-01-01';
   const q = (sql, ...a) => env.DB.prepare(sql).bind(...a);
-  const [leadCounts, sentWeek, sentToday, moneyMonth, moneyYear, outstanding, overdue, recurring, stages, dueSoon, report, hotLeads, queued, recentSent, siteRows] = await env.DB.batch([
+  const [leadCounts, sentWeek, sentToday, moneyMonth, moneyYear, outstanding, overdue, recurring, stages, dueSoon, report, hotLeads, queued, recentSent, siteRows, socialRows] = await env.DB.batch([
     q('SELECT status, COUNT(*) AS n FROM leads GROUP BY status'),
     q('SELECT COUNT(*) AS n FROM sendlog WHERE sent_at >= ?', ws),
     q('SELECT COUNT(*) AS n FROM sendlog WHERE sent_at >= ?', t),
@@ -160,7 +164,8 @@ async function dashboard(env, { unread, visitors, latestMessages }) {
     q("SELECT id, name, type, area, status, package, next, updated FROM leads WHERE status IN ('replied', 'interested') ORDER BY updated DESC LIMIT 6"),
     q('SELECT COUNT(*) AS n FROM outbox'),
     q('SELECT business, kind, sent_at, lead_id FROM sendlog ORDER BY sent_at DESC LIMIT 5'),
-    q("SELECT id, name, status, state, monitor, renews, down_since FROM sites WHERE status != 'retired'")
+    q("SELECT id, name, status, state, monitor, renews, down_since FROM sites WHERE status != 'retired'"),
+    q("SELECT status, COUNT(*) AS n FROM social_posts GROUP BY status")
   ]);
   const sl = siteRows.results || [], soon30 = plusDays(t, 30);
   const one = r => (r.results && r.results[0]) || {};
@@ -172,6 +177,7 @@ async function dashboard(env, { unread, visitors, latestMessages }) {
     money: { month: one(moneyMonth).p, year: one(moneyYear).p, outstanding: one(outstanding).p, outstandingCount: one(outstanding).n, recurring: one(recurring).p, recurringCount: one(recurring).n },
     overdue: overdue.results || [], stages: by(stages), dueSoon: dueSoon.results || [], hotLeads: hotLeads.results || [], recentSent: recentSent.results || [],
     report: rep.id ? { ...rep, needs_you: parseJSON(rep.needs_you, []), highlights: parseJSON(rep.highlights, []) } : null,
+    social: Object.fromEntries((socialRows.results || []).map(x => [x.status, x.n])),
     sites: { total: sl.length, live: sl.filter(x => x.status === 'live').length, down: sl.filter(x => x.monitor && x.state === 'down').map(x => ({ id: x.id, name: x.name, since: x.down_since })), renewing: sl.filter(x => x.renews && x.renews <= soon30).map(x => ({ id: x.id, name: x.name, renews: x.renews })) }
   };
 }
