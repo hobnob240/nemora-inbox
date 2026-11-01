@@ -89,9 +89,26 @@ export async function metaCallback(req, env, url) {
   try {
     const t1 = await graph(env, 'GET', '/oauth/access_token', { client_id: env.META_APP_ID, client_secret: env.META_APP_SECRET, redirect_uri: redirectUri(url), code, access_token: '' });
     const t2 = await graph(env, 'GET', '/oauth/access_token', { grant_type: 'fb_exchange_token', client_id: env.META_APP_ID, client_secret: env.META_APP_SECRET, fb_exchange_token: t1.access_token, access_token: '' });
-    const pages = await graph(env, 'GET', '/me/accounts', { fields: 'id,name,access_token,tasks,instagram_business_account{id,username}', limit: '50', access_token: t2.access_token });
-    const list = (pages.data || []).filter(pg => pg.access_token).map(pg => ({ id: pg.id, name: pg.name || pg.id, ig: (pg.instagram_business_account || {}).username || '', canPost: (pg.tasks || []).some(t => ['CREATE_CONTENT', 'MANAGE'].includes(t)), token: pg.access_token }));
-    if (!list.length) return fail('Facebook logged you in but shared no Pages. Tap Connect again and tick NEMORA\'s Page (and its Instagram account) when Facebook asks.');
+    const ut = t2.access_token, F = 'id,name,access_token,tasks,instagram_business_account{id,username}';
+    const found = new Map(), add = pg => { if (pg && pg.id && pg.access_token && !found.has(pg.id)) found.set(pg.id, pg); };
+    // 1. Pages the person manages directly
+    const pages = await graph(env, 'GET', '/me/accounts', { fields: F, limit: '100', access_token: ut }).catch(() => ({ data: [] }));
+    (pages.data || []).forEach(add);
+    // 2. Pages Facebook Login for Business granted one by one (they don't always show in /me/accounts)
+    let granted = [], scopes = [];
+    try {
+      const dbg = await graph(env, 'GET', '/debug_token', { input_token: ut, access_token: env.META_APP_ID + '|' + env.META_APP_SECRET });
+      scopes = (dbg.data || {}).scopes || [];
+      for (const g of (dbg.data || {}).granular_scopes || []) if (/^pages_/.test(g.scope)) granted.push(...(g.target_ids || []));
+    } catch (e) {}
+    for (const id of [...new Set(granted)].slice(0, 20)) if (!found.has(id)) add(await graph(env, 'GET', '/' + encodeURIComponent(id), { fields: F, access_token: ut }).catch(() => null));
+    // 3. Pages owned by a business portfolio the person belongs to
+    if (!found.size) {
+      const biz = await graph(env, 'GET', '/me/businesses', { fields: 'id,owned_pages.limit(50){' + F + '},client_pages.limit(50){' + F + '}', access_token: ut }).catch(() => ({ data: [] }));
+      for (const b of biz.data || []) [...((b.owned_pages || {}).data || []), ...((b.client_pages || {}).data || [])].forEach(add);
+    }
+    const list = [...found.values()].map(pg => ({ id: pg.id, name: pg.name || pg.id, ig: (pg.instagram_business_account || {}).username || '', canPost: (pg.tasks || []).some(t => ['CREATE_CONTENT', 'MANAGE'].includes(t)), token: pg.access_token }));
+    if (!list.length) return fail('Facebook logged you in but shared no Pages. Permissions Facebook gave: ' + (scopes.length ? scopes.join(', ') : 'none') + (granted.length ? '. Pages it named: ' + granted.length : '. It named no Pages') + '. Tap Connect again and tick the NEMORA Page when Facebook asks.');
     const sealed = await Promise.all(list.map(async pg => ({ ...pg, token: await seal(env, pg.token) })));
     await env.KV.put('meta:pending', JSON.stringify(sealed), { expirationTtl: 900 });
     await env.KV.delete('meta:connect-error');
