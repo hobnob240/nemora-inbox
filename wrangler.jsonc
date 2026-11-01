@@ -24,7 +24,8 @@
   "vars": {
     "SITE_ORIGINS": "https://nemora.uk,https://www.nemora.uk",
     // Facebook Login for Business configuration for the admin's Connect button (public, not a secret)
-    "META_LOGIN_CONFIG_ID": "1129926852870365"
+    "META_LOGIN_CONFIG_ID": "1129926852870365",
+    "META_APP_ID": "1804536077441262"
   },
   "observability": { "enabled": true }
 }
