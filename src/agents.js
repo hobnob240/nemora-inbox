@@ -11,7 +11,7 @@ export const AGENTS_SCHEMA = [
 
 // the team (seeded once; Charlie's switches and the agents' own reports are never overwritten)
 const TEAM = [
-  { id: 'boss', name: 'Boss', role: 'Master agent', kind: 'claude', cron: '52 7 * * *', schedule_text: 'Every morning at 7:52', trigger_id: '', reports_to: '', sort: 0,
+  { id: 'boss', name: 'Boss', role: 'Master agent', kind: 'claude', cron: '52 7 * * *', schedule_text: 'Every morning at 7:52', trigger_id: 'trig_01XDT7ahnravrYYcpRi7QLfv', reports_to: '', sort: 0,
     job: 'Checks every other agent each morning, flags anything stuck, missed or failing, and sends you one short summary.',
     duties: ['Checks each agent ran when it should have', 'Spots failed posts, bounced emails and sites that are down', 'Re-runs an agent once if it missed its slot', 'Sends you one morning summary'] },
   { id: 'outreach', name: 'Outreach', role: 'Finds and emails new clients', kind: 'claude', cron: '37 8,14 * * 1-5', schedule_text: 'Weekdays at 8:37am and 2:37pm', trigger_id: 'trig_016x5BGKCc2RmtyLqHavqNDv', sort: 1,
@@ -23,7 +23,13 @@ const TEAM = [
   { id: 'social', name: 'Social media', role: 'Facebook and Instagram', kind: 'claude', cron: '40 17 * * 0,3', schedule_text: 'Sundays and Wednesdays at 5:40pm', trigger_id: 'trig_018RXHtphFpChMCcnb3LAwYz', sort: 3,
     job: 'Plans and makes three honest posts a week from real work. Videos wait for your OK; photos and text go out on their own.',
     duties: ['Plans the week on Sundays', 'Makes photos, carousels and videos', 'Fixes failed posts on Wednesdays', 'Learns from what gets saved and shared'] },
-  { id: 'autopilot', name: 'Autopilot', role: 'Always on', kind: 'system', cron: '*/15 * * * *', schedule_text: 'Every 15 minutes', trigger_id: '', sort: 4,
+  { id: 'care', name: 'Client care', role: 'Looks after care-plan clients', kind: 'claude', cron: '13 9 * * 1-5', schedule_text: 'Weekdays at 9:13am', trigger_id: 'trig_01WxjBT2H1fyBMsGEevrd2Zd', sort: 4,
+    job: "Answers clients' change requests within a working day, makes small changes within their plan's hours, and writes their monthly reports as Outlook drafts for you to send.",
+    duties: ['Replies to care clients within a working day', "Makes small changes live within their plan's hours", 'Monthly client reports as drafts for you', 'Flags renewals and overdue invoices'] },
+  { id: 'guides', name: 'Guides writer', role: 'Writes guides for nemora.uk', kind: 'claude', cron: '13 10 1,15 * *', schedule_text: 'The 1st and 15th of each month at 10:13am', trigger_id: 'trig_0142NdQ8BK8APcu6By9sXhKn', sort: 5,
+    job: 'Researches and publishes one honest, useful guide for small business owners on nemora.uk/guides, twice a month, with every fact sourced.',
+    duties: ['Picks a useful topic nobody has covered on the site', 'Researches it from official and reliable sources', 'Writes and publishes it on nemora.uk/guides', 'Never touches any other page'] },
+  { id: 'autopilot', name: 'Autopilot', role: 'Always on', kind: 'system', cron: '*/15 * * * *', schedule_text: 'Every 15 minutes', trigger_id: '', sort: 6,
     job: 'Built into the admin itself: publishes approved social posts on time and checks every website is up.',
     duties: ['Publishes approved posts at their time', 'Checks all your websites are online', 'Alerts you if a site goes down'] }
 ];

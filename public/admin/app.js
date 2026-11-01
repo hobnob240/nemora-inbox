@@ -647,7 +647,7 @@ function agentCard(a, lead) {
   const [label, tone, dot] = HEALTH[a.health] || HEALTH.waiting;
   return h('article', { class: 'agent' + (lead ? ' lead' : '') + (a.enabled ? '' : ' off') },
     h('div', { class: 'agent-top' },
-      h('span', { class: 'agent-ico' }, icon(a.id === 'boss' ? 'boss' : a.id === 'social' ? 'social' : a.id === 'outreach' ? 'leads' : a.id === 'replies' ? 'inbox' : a.kind === 'system' ? 'refresh' : 'agents')),
+      h('span', { class: 'agent-ico' }, icon(a.id === 'boss' ? 'boss' : a.id === 'social' ? 'social' : a.id === 'outreach' ? 'leads' : a.id === 'replies' ? 'inbox' : a.id === 'care' ? 'work' : a.id === 'guides' ? 'link' : a.kind === 'system' ? 'refresh' : 'agents')),
       h('div', { class: 'agent-name' }, h('a', { href: '#agent/' + a.id }, h('h2', {}, a.name)), h('span', { class: 'small muted' }, a.role)),
       agentSwitch(a)),
     h('p', { class: 'agent-job' }, a.job),
