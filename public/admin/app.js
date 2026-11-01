@@ -31,6 +31,8 @@ const ICONS = {
   cloud: 'M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z',
   social: 'M18 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6z|M6 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z|M18 22a3 3 0 1 0 0-6 3 3 0 0 0 0 6z|M8.59 13.51l6.83 3.98|M15.41 6.51l-6.82 3.98',
   play: 'M5 3l14 9-14 9V3z',
+  agents: 'M12 8V4H8|M4 8h16v12H4z|M2 14h2|M20 14h2|M9 13v2|M15 13v2',
+  boss: 'M2 20h20|M4 20 3 8l5 4 4-7 4 7 5-4-1 12',
   refresh: 'M23 4v6h-6|M1 20v-6h6|M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15',
   settings: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z|M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z',
   more: 'M12 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2z|M19 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2z|M5 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2z',
@@ -149,11 +151,11 @@ const tag = (map, k) => pill((map[k] || [k])[0], (map[k] || [])[1]);
 
 /* ================= shell ================= */
 const NAV = [['home', 'Home'], ['inbox', 'Inbox'], ['leads', 'Leads'], ['sites', 'Sites'], ['work', 'Work'], ['money', 'Money']];
-const SIDE = [['home', 'Home'], ['inbox', 'Inbox'], ['leads', 'Leads'], ['social', 'Social'], ['sites', 'Sites'], ['work', 'Work'], ['money', 'Money']];
+const SIDE = [['home', 'Home'], ['agents', 'Agents'], ['inbox', 'Inbox'], ['leads', 'Leads'], ['social', 'Social'], ['sites', 'Sites'], ['work', 'Work'], ['money', 'Money']];
 const NAV_MORE = [['visitors', 'Visitors'], ['settings', 'Settings']];
-const MENU = [['social', 'Social'], ['visitors', 'Visitors'], ['settings', 'Settings']];
-const SECTION = { social: 'social', post: 'social', sites: 'sites', site: 'sites', inbox: 'inbox', leads: 'leads', lead: 'leads', work: 'work', project: 'work', client: 'work', clients: 'work', money: 'money', invoice: 'money', visitors: 'visitors', settings: 'settings', activity: 'settings', home: 'home' };
-const TITLES = { social: 'Social', sites: 'Sites', home: 'Home', inbox: 'Inbox', leads: 'Leads', work: 'Work', money: 'Money', visitors: 'Visitors', settings: 'Settings' };
+const MENU = [['agents', 'Agents'], ['social', 'Social'], ['visitors', 'Visitors'], ['settings', 'Settings']];
+const SECTION = { agents: 'agents', agent: 'agents', social: 'social', post: 'social', sites: 'sites', site: 'sites', inbox: 'inbox', leads: 'leads', lead: 'leads', work: 'work', project: 'work', client: 'work', clients: 'work', money: 'money', invoice: 'money', visitors: 'visitors', settings: 'settings', activity: 'settings', home: 'home' };
+const TITLES = { agents: 'Agents', social: 'Social', sites: 'Sites', home: 'Home', inbox: 'Inbox', leads: 'Leads', work: 'Work', money: 'Money', visitors: 'Visitors', settings: 'Settings' };
 let me = { username: '', unread: 0 };
 function shell() {
   $('#side-nav').replaceChildren(...SIDE.map(([k, l]) => h('a', { href: '#' + k, 'data-k': k }, icon(k), l, k === 'inbox' ? h('span', { class: 'count', hidden: true }) : null)), h('div', { class: 'sep' }), ...NAV_MORE.map(([k, l]) => h('a', { href: '#' + k, 'data-k': k }, icon(k), l)));
@@ -187,6 +189,7 @@ async function route() {
     home: showHome, inbox: id ? () => showMessage(id) : showInbox, leads: showLeads, lead: () => showLead(id),
     work: () => showWork('projects'), clients: () => showWork('clients'),
     project: () => id === 'new' ? editProject(null, extra) : showProject(id), client: () => id === 'new' ? editClient(null) : showClient(id),
+    agents: showAgents, agent: () => showAgent(id),
     social: showSocial, post: () => showPost(id),
     sites: showSites, site: () => id === 'new' ? editSite(null, extra) : showSite(id),
     money: showMoney, invoice: () => id === 'new' ? editInvoice(null, extra) : showInvoice(id),
@@ -212,6 +215,7 @@ async function showHome() {
   for (const p of d.dueSoon) todo.push(['#project/' + p.id, 'clock', p.due < d.today ? 'bad' : '', `${p.title} ${p.due < d.today ? 'was due' : 'is due'} ${day(p.due)}`, (STAGE[p.stage] || [p.stage])[0]]);
   const so = d.social || {};
   if (so.needs_approval) todo.unshift(['#social', 'play', '', plural(so.needs_approval, 'video') + ' waiting for your OK', 'Social posts for Facebook and Instagram']);
+  for (const a of d.agents || []) todo.unshift(['#agent/' + a.id, 'agents', 'bad', `${a.name} agent ${a.health === 'missed' ? 'missed a run' : a.health === 'failed' ? 'failed' : 'needs a look'}`, a.summary || 'Open Agents to see why']);
   if (so.failed) todo.unshift(['#social', 'alert', 'bad', plural(so.failed, 'social post') + ' failed to publish', 'Open Social to see why']);
   for (const x of (d.sites || {}).down || []) todo.unshift(['#site/' + x.id, 'alert', 'bad', `${x.name} is down`, x.since ? 'Since ' + when(x.since) : 'Not answering']);
   for (const x of (d.sites || {}).renewing || []) todo.push(['#site/' + x.id, 'clock', x.renews < d.today ? 'bad' : '', `${x.name}: domain renews ${day(x.renews)}`, 'Renew it so the site stays online']);
@@ -628,6 +632,61 @@ function resultsCard(p, id) {
     rows.length ? h('div', { class: 'kvs' }, rows) : h('p', { class: 'small muted' }, p.insights_at ? 'No numbers from Meta yet.' : 'Results are fetched every hour or so after a post goes out, for 30 days.'),
     i.error ? h('p', { class: 'small muted' }, /permission|scope|#10\b|#200\b/i.test(i.error) ? 'Meta needs two more permissions to share results: read_insights and instagram_manage_insights. Add them to the app, then tap Reconnect on the Social page and allow everything.' : 'Meta said: ' + i.error) : null,
     h('div', { class: 'actions' }, p.insights_at ? h('span', { class: 'small muted' }, 'Updated ' + at(p.insights_at)) : null, h('button', { class: 'btn btn-sm', onclick: async () => { if (await act(() => api('admin/social/' + id + '/insights', { method: 'POST' }), 'Results updated')) route(); } }, 'Refresh results'))]);
+}
+/* ================= agents ================= */
+const HEALTH = { ok: ['Working', 'ok', 'up'], waiting: ['Not run yet', 'info', 'wait'], paused: ['Paused', '', 'off'], missed: ['Missed a run', 'bad', 'down'], failed: ['Failed', 'bad', 'down'], attention: ['Needs a look', 'warn', 'down'], skipped: ['Skipped (paused)', '', 'off'] };
+const ago = iso => { if (!iso) return ''; const m = Math.round((Date.now() - Date.parse(iso)) / 60000); if (m < 2) return 'just now'; if (m < 60) return m + ' min ago'; const hr = Math.round(m / 60); if (hr < 24) return hr + (hr === 1 ? ' hour ago' : ' hours ago'); const dy = Math.round(hr / 24); return dy === 1 ? 'yesterday' : dy + ' days ago'; };
+function agentSwitch(a, after) {
+  if (a.kind === 'system') return h('span', { class: 'pill' }, 'Always on');
+  const b = h('button', { class: 'switch', role: 'switch', 'aria-checked': String(a.enabled), 'aria-label': (a.enabled ? 'Pause ' : 'Switch on ') + a.name },
+    h('span', { class: 'knob', 'aria-hidden': 'true' }), h('span', { class: 'switch-l' }, a.enabled ? 'On' : 'Paused'));
+  b.onclick = async () => { b.disabled = true; const r = await act(() => api('admin/agents/' + a.id, { method: 'PATCH', body: { enabled: !a.enabled } }), a.enabled ? a.name + ' paused' : a.name + ' switched on'); b.disabled = false; if (r) after ? after() : route(); };
+  return b;
+}
+function agentCard(a, lead) {
+  const [label, tone, dot] = HEALTH[a.health] || HEALTH.waiting;
+  return h('article', { class: 'agent' + (lead ? ' lead' : '') + (a.enabled ? '' : ' off') },
+    h('div', { class: 'agent-top' },
+      h('span', { class: 'agent-ico' }, icon(a.id === 'boss' ? 'boss' : a.id === 'social' ? 'social' : a.id === 'outreach' ? 'leads' : a.id === 'replies' ? 'inbox' : a.kind === 'system' ? 'refresh' : 'agents')),
+      h('div', { class: 'agent-name' }, h('a', { href: '#agent/' + a.id }, h('h2', {}, a.name)), h('span', { class: 'small muted' }, a.role)),
+      agentSwitch(a)),
+    h('p', { class: 'agent-job' }, a.job),
+    h('div', { class: 'agent-facts' },
+      h('div', {}, h('span', { class: 'k' }, 'Status'), h('span', { class: 'status-line' }, h('span', { class: 'hdot ' + dot }), pill(label, tone))),
+      h('div', {}, h('span', { class: 'k' }, 'Runs'), h('span', {}, a.schedule_text)),
+      h('div', {}, h('span', { class: 'k' }, 'Next'), h('span', {}, a.enabled ? (a.next ? at(a.next) : 'Not scheduled') : 'Paused')),
+      h('div', {}, h('span', { class: 'k' }, 'Last'), h('span', {}, a.last_run ? ago(a.last_run) : 'Not yet'))),
+    a.last_summary ? h('p', { class: 'agent-last' }, a.last_summary) : null,
+    h('a', { class: 'agent-more', href: '#agent/' + a.id }, 'History and details'));
+}
+async function showAgents() {
+  const { agents } = await api('admin/agents');
+  const boss = agents.find(a => a.id === 'boss'), team = agents.filter(a => a.id !== 'boss');
+  const on = agents.filter(a => a.enabled).length, issues = agents.filter(a => ['missed', 'failed', 'attention'].includes(a.health)).length;
+  render(
+    pageHead('Agents', 'Your team', 'Everyone working for NEMORA: what they do, when they run next and what they last did. Pause anyone with their switch; a paused agent does nothing until you switch it back on.'),
+    h('div', { class: 'tiles' },
+      tile('On duty', num(on), 'of ' + agents.length + ' agents'),
+      tile('Need a look', num(issues), issues ? 'Open them below' : 'All fine', issues ? 'hero' : ''),
+      tile('Next up', (() => { const n = agents.filter(a => a.enabled && a.next && a.kind !== 'system').sort((x, y) => x.next.localeCompare(y.next))[0]; return n ? n.name : 'Nobody'; })(), (() => { const n = agents.filter(a => a.enabled && a.next && a.kind !== 'system').sort((x, y) => x.next.localeCompare(y.next))[0]; return n ? at(n.next) : ''; })())),
+    h('div', { class: 'org' },
+      boss ? agentCard(boss, true) : null,
+      h('div', { class: 'org-line', 'aria-hidden': 'true' }),
+      h('div', { class: 'org-team' }, team.map(a => agentCard(a)))),
+    h('p', { class: 'small muted' }, 'You talk to all of them through Claude in your chat: ask there to change what an agent does.'));
+}
+async function showAgent(id) {
+  const { agent: a, runs } = await api('admin/agents/' + id);
+  const [label, tone] = HEALTH[a.health] || HEALTH.waiting;
+  render(
+    pageHead('Agents', a.name, a.job, [agentSwitch(a)], ['agents', 'All agents']),
+    h('div', { class: 'grid g2' },
+      card('What it does', [h('ul', { class: 'duties' }, a.duties.map(d => h('li', {}, d)))]),
+      card('Schedule', [h('div', { class: 'kvs' },
+        kv('Status', pill(label, tone)), kv('Runs', a.schedule_text), kv('Next run', a.enabled ? (a.next ? full(a.next) : '') : 'Paused'), kv('Last run', a.last_run ? full(a.last_run) + ' (' + ago(a.last_run) + ')' : 'Not yet'),
+        kv('Last 14 days', [a.stats.ok ? plural(a.stats.ok, 'good run') : '', a.stats.attention ? plural(a.stats.attention, 'run') + ' needing a look' : '', a.stats.failed ? plural(a.stats.failed, 'failed run') : '', a.stats.skipped ? plural(a.stats.skipped, 'skipped run') : ''].filter(Boolean).join(', ') || 'No runs yet'))])),
+    card('History', runs.length ? h('ol', { class: 'runs' }, runs.map(r => { const [l, t] = HEALTH[r.status] || [r.status, '']; return h('li', {}, h('div', { class: 'item-top' }, pill(l, t), h('span', { class: 'when' }, full(r.finished || r.started))), h('p', {}, r.summary || '')); }))
+      : empty('No runs yet', 'Each run adds a line here: what it did and anything that needs you.')));
 }
 async function showSocial() {
   const [{ posts, now }, conn, pend] = await Promise.all([api('admin/social'), api('admin/social/connection').catch(() => ({ connected: false, reason: 'missing' })), api('admin/social/connect/pending').catch(() => ({ pages: [], error: '' }))]);

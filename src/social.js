@@ -1,3 +1,4 @@
+import { agentOn } from './agents.js';
 // NEMORA social: a queue of Facebook Page and Instagram posts, published straight to Meta's Graph API.
 // The social media agent (a scheduled Claude task) writes posts into D1; photos and text are approved by the
 // playbook, videos wait for Charlie's tap in the admin. This Worker publishes due posts every 15 minutes.
@@ -186,6 +187,7 @@ export function checkPost(env, p) {
 // publish everything that's due. Returns a short summary for the log.
 export async function publishDue(env) {
   if (!(await pageToken(env))) return [];
+  if (!(await agentOn(env, 'social'))) return [];
   for (const s of SOCIAL_SCHEMA) await env.DB.prepare(s).run();
   const due = (await env.DB.prepare(`SELECT * FROM social_posts WHERE status IN ('approved', 'publishing') AND scheduled_at != '' AND scheduled_at <= ? ORDER BY scheduled_at LIMIT 5`).bind(now()).all()).results || [];
   const out = [];

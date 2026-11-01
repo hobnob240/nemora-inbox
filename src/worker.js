@@ -19,6 +19,7 @@
 
 import { adminBiz, checkAllSites } from './biz.js';
 import { publishDue, refreshInsights, metaCallback } from './social.js';
+import { autopilotBeat } from './agents.js';
 
 const SESSION_TTL = 8 * 60 * 60;
 const COOKIE = '__Host-nemora_admin';
@@ -40,8 +41,15 @@ export default {
   async scheduled(event, env, ctx) {
     if (!env.DB) return;
     if (event.cron === '17 3 * * *') { ctx.waitUntil(env.DB.prepare('DELETE FROM hits WHERE ts < ?').bind(Date.now() - 400 * 86400000).run()); return; }
-    ctx.waitUntil(checkAllSites(env).then(changes => Promise.all(changes.map(c => siteAlert(env, c)))).catch(e => console.error('site checks failed', e)));
-    ctx.waitUntil(publishDue(env).then(r => { if (r.length) console.log('social', JSON.stringify(r)); }).catch(e => console.error('social publish failed', e)));
+    // the Autopilot: site checks and social publishing, then one heartbeat for the Agents page
+    ctx.waitUntil((async () => {
+      const notes = []; let status = 'ok';
+      try { const changes = await checkAllSites(env); await Promise.all(changes.map(c => siteAlert(env, c))); const down = changes.filter(c => c.changed === 'down').length; notes.push('Websites checked' + (down ? ', ' + down + ' went down' : '')); if (down) status = 'attention'; }
+      catch (e) { console.error('site checks failed', e); notes.push('Website checks failed: ' + e.message); status = 'failed'; }
+      try { const r = await publishDue(env); if (r.length) { console.log('social', JSON.stringify(r)); const bad = r.filter(x => x.error).length; notes.push(plural(r.length - bad, 'post') + ' published' + (bad ? ', ' + bad + ' failed' : '')); if (bad && status === 'ok') status = 'attention'; } }
+      catch (e) { console.error('social publish failed', e); notes.push('Publishing failed: ' + e.message); status = 'failed'; }
+      await autopilotBeat(env, status, notes.join('. ')).catch(e => console.error('autopilot beat failed', e));
+    })());
     // once an hour: fetch reach and engagement for recent posts (kept small to stay well inside subrequest limits)
     if (new Date(event.scheduledTime || Date.now()).getUTCMinutes() < 15) ctx.waitUntil(refreshInsights(env).then(r => { if (r.length) console.log('social insights', JSON.stringify(r)); }).catch(e => console.error('social insights failed', e)));
   }
@@ -451,3 +459,5 @@ function adminHeaders(res, cacheable = false) {
   r.headers.set('Cross-Origin-Opener-Policy', 'same-origin');
   return r;
 }
+
+function plural(n, w) { return n + ' ' + w + (n === 1 ? '' : 's'); }
