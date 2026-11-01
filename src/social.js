@@ -101,14 +101,21 @@ export async function metaCallback(req, env, url) {
       scopes = (dbg.data || {}).scopes || [];
       for (const g of (dbg.data || {}).granular_scopes || []) if (/^pages_/.test(g.scope)) granted.push(...(g.target_ids || []));
     } catch (e) {}
-    for (const id of [...new Set(granted)].slice(0, 20)) if (!found.has(id)) add(await graph(env, 'GET', '/' + encodeURIComponent(id), { fields: F, access_token: ut }).catch(() => null));
+    const errs = [];
+    for (const id of [...new Set(granted)].slice(0, 20)) {
+      if (found.has(id)) continue;
+      // 'tasks' only exists on /me/accounts, so ask a Page for its own fields; drop Instagram if that part is refused
+      let pg = await graph(env, 'GET', '/' + encodeURIComponent(id), { fields: 'id,name,access_token,instagram_business_account{id,username}', access_token: ut }).catch(e => { errs.push(e.message); return null; });
+      if (!pg) pg = await graph(env, 'GET', '/' + encodeURIComponent(id), { fields: 'id,name,access_token', access_token: ut }).catch(e => { errs.push(e.message); return null; });
+      if (pg) { pg.tasks = pg.tasks || ['MANAGE']; add(pg); }
+    }
     // 3. Pages owned by a business portfolio the person belongs to
     if (!found.size) {
       const biz = await graph(env, 'GET', '/me/businesses', { fields: 'id,owned_pages.limit(50){' + F + '},client_pages.limit(50){' + F + '}', access_token: ut }).catch(() => ({ data: [] }));
       for (const b of biz.data || []) [...((b.owned_pages || {}).data || []), ...((b.client_pages || {}).data || [])].forEach(add);
     }
     const list = [...found.values()].map(pg => ({ id: pg.id, name: pg.name || pg.id, ig: (pg.instagram_business_account || {}).username || '', canPost: (pg.tasks || []).some(t => ['CREATE_CONTENT', 'MANAGE'].includes(t)), token: pg.access_token }));
-    if (!list.length) return fail('Facebook logged you in but shared no Pages. Permissions Facebook gave: ' + (scopes.length ? scopes.join(', ') : 'none') + (granted.length ? '. Pages it named: ' + granted.length : '. It named no Pages') + '. Tap Connect again and tick the NEMORA Page when Facebook asks.');
+    if (!list.length) return fail('Facebook logged you in but shared no Pages. Permissions Facebook gave: ' + (scopes.length ? scopes.join(', ') : 'none') + (granted.length ? '. Pages it named: ' + new Set(granted).size : '. It named no Pages') + (errs.length ? '. Facebook said: ' + [...new Set(errs)].join(' / ').slice(0, 200) : '') + '. Tap Connect again and tick the NEMORA Page when Facebook asks.');
     const sealed = await Promise.all(list.map(async pg => ({ ...pg, token: await seal(env, pg.token) })));
     await env.KV.put('meta:pending', JSON.stringify(sealed), { expirationTtl: 900 });
     await env.KV.delete('meta:connect-error');
