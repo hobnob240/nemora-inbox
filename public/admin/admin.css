@@ -359,3 +359,7 @@ video.pv{aspect-ratio:9/16;max-height:72vh;width:auto;max-width:100%;margin:0 au
 .runs li{padding:12px 0;border-bottom:1px solid var(--line-2);display:grid;gap:6px}
 .runs li:last-child{border-bottom:0}
 .runs p{margin:0;font-size:.9rem;color:var(--ink-2)}
+/* site builder list */
+.list.card > .item{display:grid;gap:8px;padding:14px 2px;border-top:1px solid var(--line-2);min-width:0}
+.list.card > .item:first-child{border-top:0}
+.list.card > .item .actions{display:flex;flex-wrap:wrap;gap:8px}

@@ -20,6 +20,7 @@
 import { adminBiz, checkAllSites } from './biz.js';
 import { publishDue, refreshInsights, metaCallback } from './social.js';
 import { autopilotBeat } from './agents.js';
+import { adminBuilds, publicBuild } from './builds.js';
 
 const SESSION_TTL = 8 * 60 * 60;
 const COOKIE = '__Host-nemora_admin';
@@ -30,6 +31,8 @@ const PER_IP_HOUR = 5, PER_DAY = 200;           // spam limits
 const MSG_ID = /^\d{13}-[a-f0-9]{8}$/;
 const PACKAGES = ['starter', 'business', 'premium', 'bigger', ''];
 const NEEDS = ['A new website', 'A redesign of my current website', 'A booking, membership or payment system', 'Not sure yet'];
+// the builder's editing canvas needs inline styles, Google Fonts and photos from anywhere (still no outside scripts)
+const BUILDER_CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; media-src 'self' https:; connect-src 'self'; font-src 'self' data: https://fonts.gstatic.com; frame-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'";
 const ADMIN_CSP = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: https://nemora.uk; media-src https://nemora.uk; connect-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'";
 
 export default {
@@ -72,6 +75,7 @@ async function route(req, env, ctx) {
   // ---- admin ----
   if (p === '/' ) return redirect(url.origin + '/admin/');
   if (p === '/meta/callback' && m === 'GET') return metaCallback(req, env, url);
+  if ((p.startsWith('/v/') || p.startsWith('/b/img/')) && m === 'GET' && env.DB) { const r = await publicBuild(req, env, url); if (r) return r; }
   if (p === '/api/setup-state' && m === 'GET') { const cr = await credentials(env); return json({ needsSetup: !cr.hash, hasCode: !!env.SETUP_CODE }); }
   if (p === '/api/setup') return m === 'POST' ? setup(req, env, url) : notAllowed();
   if (p === '/api/login') return m === 'POST' ? login(req, env, url) : notAllowed();
@@ -84,6 +88,11 @@ async function route(req, env, ctx) {
   }
   if (p.startsWith('/api/')) return json({ error: 'Not found.' }, 404);
   if (p === '/admin') return redirect(url.origin + '/admin/');
+  if (p === '/admin/builder' || p === '/admin/builder.html') {
+    if (!(await getSession(req, env))) return redirect(url.origin + '/admin/');
+    const r = adminHeaders(await env.ASSETS.fetch(new Request(url.origin + '/admin/builder', { headers: req.headers })));
+    r.headers.set('Content-Security-Policy', BUILDER_CSP); return r;
+  }
   if (p === '/admin/app' || p === '/admin/app.html') {
     if (!(await getSession(req, env))) return redirect(url.origin + '/admin/');
     return adminHeaders(await env.ASSETS.fetch(new Request(url.origin + '/admin/app', { headers: req.headers })));
@@ -293,6 +302,13 @@ async function adminApi(req, env, path, m, s) {
     extra = { unread: msgs.filter(e => e.status === 'new').length, latestMessages: msgs.filter(e => e.status !== 'archived').slice(0, 4),
       visitors: t.enabled ? { week: t.totals.visitors || 0, prev: t.previous.visitors || 0, views: t.totals.views || 0, live: t.live, series: t.series, from: t.from } : null };
   }
+  if (path === 'builds' || path.startsWith('builds/')) {
+    if (!env.DB) return json({ error: 'The database is not connected.' }, 503);
+    const [, id, sub] = path.split('/');
+    const isImage = sub === 'images';
+    const body = !isImage && ['POST', 'PUT', 'PATCH'].includes(m) ? ((await readJson(req, 2 * 1024 * 1024)) || {}) : {};
+    return adminBuilds(req, env, id, sub, m, body, action => log(env, req, s.u, action), readRaw);
+  }
   const biz = await adminBiz(req, env, path, m, readJson, action => log(env, req, s.u, action), s.u, extra);
   if (biz) return biz;
   return json({ error: 'Not found.' }, 404);
@@ -438,6 +454,10 @@ const b64e = b => btoa(String.fromCharCode(...b));
 function b64d(s) { try { return Uint8Array.from(atob(s), c => c.charCodeAt(0)); } catch { return new Uint8Array(0); } }
 
 /* ---------------- helpers ---------------- */
+async function readRaw(req, max) {
+  const len = Number(req.headers.get('content-length') || 0); if (len > max) return null;
+  const buf = await req.arrayBuffer(); return buf.byteLength && buf.byteLength <= max ? buf : null;
+}
 async function readJson(req, max = 64 * 1024) {
   try { const t = await req.text(); if (t.length > max) return null; const v = JSON.parse(t); return v && typeof v === 'object' && !Array.isArray(v) ? v : null; } catch { return null; }
 }

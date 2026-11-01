@@ -31,6 +31,8 @@ const ICONS = {
   cloud: 'M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z',
   social: 'M18 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6z|M6 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z|M18 22a3 3 0 1 0 0-6 3 3 0 0 0 0 6z|M8.59 13.51l6.83 3.98|M15.41 6.51l-6.82 3.98',
   play: 'M5 3l14 9-14 9V3z',
+  builder: 'M3 3h18v18H3z|M3 9h18|M9 9v12',
+  builds: 'M3 3h18v18H3z|M3 9h18|M9 9v12',
   agents: 'M12 8V4H8|M4 8h16v12H4z|M2 14h2|M20 14h2|M9 13v2|M15 13v2',
   boss: 'M2 20h20|M4 20 3 8l5 4 4-7 4 7 5-4-1 12',
   refresh: 'M23 4v6h-6|M1 20v-6h6|M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15',
@@ -151,11 +153,11 @@ const tag = (map, k) => pill((map[k] || [k])[0], (map[k] || [])[1]);
 
 /* ================= shell ================= */
 const NAV = [['home', 'Home'], ['inbox', 'Inbox'], ['leads', 'Leads'], ['sites', 'Sites'], ['work', 'Work'], ['money', 'Money']];
-const SIDE = [['home', 'Home'], ['agents', 'Agents'], ['inbox', 'Inbox'], ['leads', 'Leads'], ['social', 'Social'], ['sites', 'Sites'], ['work', 'Work'], ['money', 'Money']];
+const SIDE = [['home', 'Home'], ['agents', 'Agents'], ['inbox', 'Inbox'], ['leads', 'Leads'], ['social', 'Social'], ['sites', 'Sites'], ['builds', 'Builder'], ['work', 'Work'], ['money', 'Money']];
 const NAV_MORE = [['visitors', 'Visitors'], ['settings', 'Settings']];
-const MENU = [['agents', 'Agents'], ['social', 'Social'], ['visitors', 'Visitors'], ['settings', 'Settings']];
-const SECTION = { agents: 'agents', agent: 'agents', social: 'social', post: 'social', sites: 'sites', site: 'sites', inbox: 'inbox', leads: 'leads', lead: 'leads', work: 'work', project: 'work', client: 'work', clients: 'work', money: 'money', invoice: 'money', visitors: 'visitors', settings: 'settings', activity: 'settings', home: 'home' };
-const TITLES = { agents: 'Agents', social: 'Social', sites: 'Sites', home: 'Home', inbox: 'Inbox', leads: 'Leads', work: 'Work', money: 'Money', visitors: 'Visitors', settings: 'Settings' };
+const MENU = [['agents', 'Agents'], ['builds', 'Builder'], ['social', 'Social'], ['visitors', 'Visitors'], ['settings', 'Settings']];
+const SECTION = { builds: 'builds', agents: 'agents', agent: 'agents', social: 'social', post: 'social', sites: 'sites', site: 'sites', inbox: 'inbox', leads: 'leads', lead: 'leads', work: 'work', project: 'work', client: 'work', clients: 'work', money: 'money', invoice: 'money', visitors: 'visitors', settings: 'settings', activity: 'settings', home: 'home' };
+const TITLES = { builds: 'Builder', agents: 'Agents', social: 'Social', sites: 'Sites', home: 'Home', inbox: 'Inbox', leads: 'Leads', work: 'Work', money: 'Money', visitors: 'Visitors', settings: 'Settings' };
 let me = { username: '', unread: 0 };
 function shell() {
   $('#side-nav').replaceChildren(...SIDE.map(([k, l]) => h('a', { href: '#' + k, 'data-k': k }, icon(k), l, k === 'inbox' ? h('span', { class: 'count', hidden: true }) : null)), h('div', { class: 'sep' }), ...NAV_MORE.map(([k, l]) => h('a', { href: '#' + k, 'data-k': k }, icon(k), l)));
@@ -189,6 +191,7 @@ async function route() {
     home: showHome, inbox: id ? () => showMessage(id) : showInbox, leads: showLeads, lead: () => showLead(id),
     work: () => showWork('projects'), clients: () => showWork('clients'),
     project: () => id === 'new' ? editProject(null, extra) : showProject(id), client: () => id === 'new' ? editClient(null) : showClient(id),
+    builds: showBuilds,
     agents: showAgents, agent: () => showAgent(id),
     social: showSocial, post: () => showPost(id),
     sites: showSites, site: () => id === 'new' ? editSite(null, extra) : showSite(id),
@@ -632,6 +635,41 @@ function resultsCard(p, id) {
     rows.length ? h('div', { class: 'kvs' }, rows) : h('p', { class: 'small muted' }, p.insights_at ? 'No numbers from Meta yet.' : 'Results are fetched every hour or so after a post goes out, for 30 days.'),
     i.error ? h('p', { class: 'small muted' }, /permission|scope|#10\b|#200\b/i.test(i.error) ? 'Meta needs two more permissions to share results: read_insights and instagram_manage_insights. Add them to the app, then tap Reconnect on the Social page and allow everything.' : 'Meta said: ' + i.error) : null,
     h('div', { class: 'actions' }, p.insights_at ? h('span', { class: 'small muted' }, 'Updated ' + at(p.insights_at)) : null, h('button', { class: 'btn btn-sm', onclick: async () => { if (await act(() => api('admin/social/' + id + '/insights', { method: 'POST' }), 'Results updated')) route(); } }, 'Refresh results'))]);
+}
+/* ================= site builder ================= */
+async function showBuilds() {
+  const [{ builds }, pj] = await Promise.all([api('admin/builds'), api('admin/projects').catch(() => ({ projects: [] }))]);
+  const projects = pj.projects || [];
+  let fileText = null;
+  const file = h('input', { type: 'file', accept: '.html,.htm,text/html', 'aria-label': 'HTML file to start from' });
+  file.addEventListener('change', async () => { fileText = file.files[0] ? await file.files[0].text() : null; });
+  const f = form([
+    { k: 'title', label: 'Name', placeholder: 'The business name', full: true },
+    { k: 'project_id', label: 'Project (optional)', type: 'select', options: [['', 'Not linked']].concat(projects.map(p => [p.id, p.title])) }
+  ], {}, { title: 'New site build', submit: 'Create and open', after: h('div', { class: 'field' }, h('label', {}, 'Start from a finished page (optional)'), h('span', { class: 'hint' }, 'An .html file with its styles inside. Leave empty to start from NEMORA\'s sections.'), file),
+    onSave: async v => {
+      const body = { title: v.title, project_id: v.project_id };
+      if (fileText) {
+        const css = [...fileText.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi)].map(m => m[1]).join('\n');
+        const bm = fileText.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+        body.html = (bm ? bm[1] : fileText).replace(/<style[^>]*>[\s\S]*?<\/style>/gi, ''); body.css = css;
+      }
+      const r = await api('admin/builds', { method: 'POST', body }); location.href = '/admin/builder#' + r.build.id;
+    }, onCancel: () => { f.el.hidden = true; } });
+  f.el.hidden = true;
+  const copy = async (b, btn) => { const url = location.origin + b.link; try { await navigator.clipboard.writeText(url); btn.textContent = 'Copied'; } catch (e) { toast(url); } };
+  render(
+    pageHead('Builder', 'Site builder', 'Change a client\'s nearly finished site by dragging and clicking, while they watch it update on their own screen. Best on a laptop.', [h('button', { class: 'btn btn-gold', onclick: () => { f.el.hidden = false; f.els.title.focus(); } }, 'New site build')]),
+    f.el,
+    builds.length ? h('div', { class: 'list card' }, builds.map(b => h('div', { class: 'item' },
+      h('div', { class: 'item-top' }, h('strong', {}, b.title), pill(b.status === 'approved' ? 'Approved' : 'Draft', b.status === 'approved' ? 'ok' : 'info'), h('span', { class: 'when' }, 'Changed ' + when(b.updated))),
+      b.project_id ? h('a', { class: 'small', href: '#project/' + b.project_id }, (projects.find(p => p.id === b.project_id) || {}).title || 'Project') : null,
+      h('div', { class: 'actions' },
+        h('a', { class: 'btn btn-sm btn-gold', href: '/admin/builder#' + b.id }, 'Open builder'),
+        h('button', { class: 'btn btn-sm', onclick: e => copy(b, e.currentTarget) }, 'Copy client link'),
+        h('a', { class: 'btn btn-sm', href: b.link, target: '_blank', rel: 'noopener' }, 'See client view'),
+        (() => { const box = confirmBox('Delete this build and all its versions? The client link stops working.', 'Delete', async () => { if (await act(() => api('admin/builds/' + b.id, { method: 'DELETE' }), 'Deleted')) route(); }); return h('span', {}, h('button', { class: 'btn btn-sm btn-ghost', onclick: () => box.hidden = false }, 'Delete'), box); })()))))
+      : empty('No site builds yet', 'Start one from NEMORA\'s sections, or from a finished page, then send the client their live link during the call.'));
 }
 /* ================= agents ================= */
 const HEALTH = { ok: ['Working', 'ok', 'up'], waiting: ['Not run yet', 'info', 'wait'], paused: ['Paused', '', 'off'], missed: ['Missed a run', 'bad', 'down'], failed: ['Failed', 'bad', 'down'], attention: ['Needs a look', 'warn', 'down'], skipped: ['Skipped (paused)', '', 'off'] };

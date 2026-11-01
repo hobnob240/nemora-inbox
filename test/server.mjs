@@ -6,7 +6,7 @@ const store = new Map();
 const KV = {
   async get(k, t) { const e = store.get(k); if (!e || (e.exp && e.exp < Date.now())) return null; return t === 'json' ? JSON.parse(e.v) : e.v; },
   async getWithMetadata(k) { const e = store.get(k); if (!e || (e.exp && e.exp < Date.now())) return { value: null, metadata: null }; return { value: e.v, metadata: e.m || null }; },
-  async put(k, v, o = {}) { store.set(k, { v: typeof v === 'string' ? v : String(v), m: o.metadata, exp: o.expirationTtl ? Date.now() + o.expirationTtl * 1000 : 0 }); },
+  async put(k, v, o = {}) { store.set(k, { v: typeof v === 'string' || v instanceof ArrayBuffer ? v : String(v), m: o.metadata, exp: o.expirationTtl ? Date.now() + o.expirationTtl * 1000 : 0 }); },
   async delete(k) { store.delete(k); },
   async list({ prefix = '' } = {}) { return { keys: [...store.entries()].filter(([k, e]) => k.startsWith(prefix) && !(e.exp && e.exp < Date.now())).sort().map(([k, e]) => ({ name: k, metadata: e.m })), list_complete: true }; }
 };

@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#101219">
+<title>Site builder | NEMORA</title>
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="stylesheet" href="/admin/vendor/grapesjs/grapes.min.css">
+<link rel="stylesheet" href="/admin/builder.css?v=1">
+<script src="/admin/vendor/grapesjs/grapes.min.js" defer></script>
+<script src="/admin/builder.js?v=1" defer></script>
+</head>
+<body>
+<div class="b-app">
+  <header class="b-top">
+    <a class="b-back" href="/admin/app#builds" aria-label="Back to all builds">&#8592; Builds</a>
+    <strong class="b-title" id="b-title">Loading…</strong>
+    <span class="b-status" id="b-status" role="status"></span>
+    <span class="b-grow"></span>
+    <div class="b-seg" role="group" aria-label="Screen size">
+      <button type="button" data-device="desktop" aria-pressed="true">Desktop</button>
+      <button type="button" data-device="tablet" aria-pressed="false">Tablet</button>
+      <button type="button" data-device="phone" aria-pressed="false">Phone</button>
+    </div>
+    <button type="button" class="b-btn" id="b-undo" title="Undo (Ctrl+Z)">Undo</button>
+    <button type="button" class="b-btn" id="b-redo" title="Redo (Ctrl+Shift+Z)">Redo</button>
+    <button type="button" class="b-btn" id="b-versions">Versions</button>
+    <button type="button" class="b-btn" id="b-link">Client link</button>
+    <button type="button" class="b-btn b-gold" id="b-approve">Client approves</button>
+  </header>
+  <div class="b-banner" id="b-banner" hidden></div>
+  <div class="b-main">
+    <aside class="b-left" aria-label="Add and arrange">
+      <div class="b-tabs" role="tablist">
+        <button type="button" role="tab" aria-selected="true" data-tab="blocks">Add</button>
+        <button type="button" role="tab" aria-selected="false" data-tab="layers">Layers</button>
+      </div>
+      <p class="b-hint" data-for="blocks">Drag a section onto the page. Click any text to type, double-click a photo to swap it.</p>
+      <div id="blocks" data-pane="blocks"></div>
+      <div id="layers" data-pane="layers" hidden></div>
+    </aside>
+    <main class="b-canvas"><div id="gjs"></div></main>
+    <aside class="b-right" aria-label="Style">
+      <div class="b-tabs" role="tablist">
+        <button type="button" role="tab" aria-selected="true" data-tab="styles">Style</button>
+        <button type="button" role="tab" aria-selected="false" data-tab="traits">Settings</button>
+      </div>
+      <p class="b-hint" id="b-pick">Click something on the page to style it.</p>
+      <div id="selectors" data-pane="styles"></div>
+      <div id="styles" data-pane="styles"></div>
+      <div id="traits" data-pane="traits" hidden></div>
+    </aside>
+  </div>
+</div>
+<dialog class="b-dialog" id="b-dialog"><div id="b-dialog-body"></div><form method="dialog"><button class="b-btn" type="submit">Close</button></form></dialog>
+<div class="b-small" id="b-small" hidden><p><strong>The builder needs a bigger screen.</strong></p><p>Open it on a laptop or tablet. On your phone you can still copy the client link from the Builds page.</p><a class="b-btn b-gold" href="/admin/app#builds">Back to builds</a></div>
+</body>
+</html>

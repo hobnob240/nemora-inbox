@@ -1,0 +1,9 @@
+html, body { height: 100%; margin: 0; }
+body { display: grid; grid-template-rows: auto 1fr; background: #101219; font: 13px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; color: #ece6d8; }
+.vbar { display: flex; align-items: center; gap: 10px; padding: 8px 14px; min-height: 40px; }
+.vdot { width: 8px; height: 8px; border-radius: 50%; background: #4caf7d; box-shadow: 0 0 0 3px rgba(76, 175, 125, .2); flex: none; }
+.vtitle { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vnote { color: #9a968e; margin-left: auto; text-align: right; }
+.flash .vnote { color: #e8cf98; }
+#site { width: 100%; height: 100%; border: 0; background: #fff; display: block; }
+@media (max-width: 600px) { .vnote { display: none; } }
