@@ -617,6 +617,18 @@ function preview(p, big) {
   if (m.length) return big ? h('div', { class: 'pv-row' }, m.map(u => h('img', { src: u, alt: '', loading: 'lazy' }))) : h('div', { class: 'pv' }, h('img', { src: m[0], alt: '', loading: 'lazy' }), m.length > 1 ? h('span', { class: 'pv-badge' }, '1 of ' + m.length) : null);
   return h('div', { class: 'pv pv-text' }, h('p', {}, (p.caption || '').slice(0, 140)));
 }
+// results from Meta (filled in hourly for 30 days after a post goes out)
+const RES = [['reach', 'reached'], ['views', 'views'], ['likes', 'likes'], ['reactions', 'reactions'], ['comments', 'comments'], ['shares', 'shares'], ['saves', 'saves'], ['clicks', 'clicks']];
+const resLine = r => RES.filter(([k]) => r && r[k] !== undefined).map(([k, l]) => num(r[k]) + ' ' + (r[k] === 1 && k !== 'reach' ? l.replace(/s$/, '') : l)).join(' · ');
+const resShort = p => { const i = p.insights || {}, reach = (i.ig && i.ig.reach || 0) + (i.fb && i.fb.reach || 0), eng = ['likes', 'reactions', 'comments', 'shares', 'saves'].reduce((t, k) => t + ((i.ig && i.ig[k]) || 0) + ((i.fb && i.fb[k]) || 0), 0); return p.insights_at && (reach || eng) ? num(reach) + ' reached · ' + num(eng) + ' interactions' : ''; };
+function resultsCard(p, id) {
+  const i = p.insights || {};
+  const rows = [i.ig && Object.keys(i.ig).length ? kv('Instagram', resLine(i.ig) || 'No numbers yet') : null, i.fb && Object.keys(i.fb).length ? kv('Facebook', resLine(i.fb) || 'No numbers yet') : null].filter(Boolean);
+  return card('Results', [
+    rows.length ? h('div', { class: 'kvs' }, rows) : h('p', { class: 'small muted' }, p.insights_at ? 'No numbers from Meta yet.' : 'Results are fetched every hour or so after a post goes out, for 30 days.'),
+    i.error ? h('p', { class: 'small muted' }, /permission|scope|#10\b|#200\b/i.test(i.error) ? 'Meta needs two extra permissions on your Page token to share results: read_insights and instagram_manage_insights. Generate a new token with them (setup step 3) and replace META_PAGE_TOKEN in Cloudflare.' : 'Meta said: ' + i.error) : null,
+    h('div', { class: 'actions' }, p.insights_at ? h('span', { class: 'small muted' }, 'Updated ' + at(p.insights_at)) : null, h('button', { class: 'btn btn-sm', onclick: async () => { if (await act(() => api('admin/social/' + id + '/insights', { method: 'POST' }), 'Results updated')) route(); } }, 'Refresh results'))]);
+}
 async function showSocial() {
   const [{ posts, now }, conn] = await Promise.all([api('admin/social'), api('admin/social/connection').catch(() => ({ connected: false, reason: 'missing' }))]);
   const groups = { needs: x => x.status === 'needs_approval', scheduled: x => ['approved', 'publishing'].includes(x.status), posted: x => x.status === 'posted', back: x => x.status === 'rejected', failed: x => x.status === 'failed', all: () => true };
@@ -634,7 +646,7 @@ async function showSocial() {
     chipsRow([['needs', 'Needs your OK', posts.filter(groups.needs).length], ['scheduled', 'Scheduled', posts.filter(groups.scheduled).length], ['posted', 'Posted', posts.filter(groups.posted).length], ['back', 'Sent back', posts.filter(groups.back).length], ['failed', 'Failed', posts.filter(groups.failed).length], ['all', 'All', posts.length]].filter(([k, , n]) => n || k === 'all' || k === socialFilter), socialFilter, k => { socialFilter = k; showSocial(); }),
     list.length ? h('div', { class: 'post-grid' }, list.map(p => h('a', { class: 'post-card', href: '#post/' + p.id }, preview(p),
       h('div', { class: 'post-meta' }, h('div', { class: 'item-top' }, tag(SP, p.status), h('span', { class: 'when' }, SK[p.kind] + ' · ' + (p.status === 'posted' ? 'posted ' + day(p.posted_at) : p.scheduled_at ? at(p.scheduled_at) : 'not scheduled'))),
-        h('p', { class: 'x' }, p.caption), h('span', { class: 'small muted' }, plat(p.platforms))))))
+        h('p', { class: 'x' }, p.caption), h('span', { class: 'small muted' }, p.status === 'posted' && resShort(p) ? resShort(p) : plat(p.platforms))))))
       : empty('Nothing here yet', posts.length ? null : 'Your social media agent fills this up. Its first run plans the week\'s posts.'));
 }
 function connCard(c) {
@@ -644,7 +656,7 @@ function connCard(c) {
     h('ol', { class: 'small steps-list' },
       h('li', {}, 'Make sure NEMORA\'s Instagram is a Business account and is linked to the NEMORA Facebook Page (Instagram app: Settings, Account type and tools).'),
       h('li', {}, 'Go to developers.facebook.com, choose Create app, pick "Other", then "Business". Name it NEMORA Social.'),
-      h('li', {}, 'Open Tools, then Graph API Explorer. Choose your app, then add these permissions: pages_show_list, pages_read_engagement, pages_manage_posts, instagram_basic, instagram_content_publish, business_management. Press Generate Access Token and allow it for the NEMORA Page.'),
+      h('li', {}, 'Open Tools, then Graph API Explorer. Choose your app, then add these permissions: pages_show_list, pages_read_engagement, pages_manage_posts, read_insights, instagram_basic, instagram_content_publish, instagram_manage_insights, business_management. Press Generate Access Token and allow it for the NEMORA Page.'),
       h('li', {}, 'In Explorer, change "User Token" to the NEMORA Page so it shows a Page token. Open the Access Token Debugger (the blue i), press Extend Access Token, then use that longer token to get a Page token that doesn\'t expire.'),
       h('li', {}, 'In Cloudflare: Workers, nemora-inbox, Settings, Variables and secrets. Add a Secret called META_PAGE_TOKEN and paste the Page token. Save.'),
       h('li', {}, 'Come back here and refresh. It should say Connected.')),
@@ -672,6 +684,7 @@ async function showPost(id) {
         card('Caption', [cap, count]),
         card('When and where', [h('div', { class: 'fields' }, h('div', { class: 'field' }, h('label', {}, 'Goes out'), atIn), h('div', { class: 'field' }, h('label', {}, 'Where'), where)),
           editable ? h('div', { class: 'actions' }, h('button', { class: 'btn btn-sm', onclick: () => act(save, 'Saved') }, 'Save changes')) : null]),
+        p.status === 'posted' ? resultsCard(p, id) : null,
         p.status === 'posted' ? card('Live', h('div', { class: 'actions' }, safeHref(p.fb_url) ? h('a', { class: 'btn', href: p.fb_url, target: '_blank', rel: 'noopener noreferrer' }, icon('link'), 'On Facebook') : null, safeHref(p.ig_url) ? h('a', { class: 'btn', href: p.ig_url, target: '_blank', rel: 'noopener noreferrer' }, icon('link'), 'On Instagram') : null))
           : card(null, [h('div', { class: 'actions' },
             p.status === 'needs_approval' || p.status === 'rejected' || p.status === 'failed' ? h('button', { class: 'btn btn-gold', onclick: async () => { if (editable) await act(save); if (await act(() => api('admin/social/' + id + '/approve', { method: 'POST' }), 'Approved. It goes out ' + (new Date(atIn.value) > new Date() ? at(new Date(atIn.value).toISOString()) : 'within 15 minutes'))) route(); } }, icon('check'), 'Approve') : null,

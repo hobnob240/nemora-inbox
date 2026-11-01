@@ -131,6 +131,73 @@ export async function publishOne(env, p) {
   }
 }
 
+/* ---------- results: reach and engagement from Meta for 30 days after a post goes out ----------
+   Stored as JSON in social_posts.insights ({ fb: {...}, ig: {...}, error }) so Charlie sees it in the admin and the
+   social media agent can learn which posts work. Needs the read_insights and instagram_manage_insights permissions
+   on the Page token. Never affects publishing: every call here is allowed to fail. */
+const INSIGHT_COLS = [['insights', "TEXT NOT NULL DEFAULT '{}'"], ['insights_at', "TEXT NOT NULL DEFAULT ''"]];
+export async function ensureInsightCols(env) {
+  if (env.KV && await env.KV.get('social:cols:v1')) return;
+  const cols = ((await env.DB.prepare('PRAGMA table_info(social_posts)').all()).results || []).map(c => c.name);
+  for (const [c, t] of INSIGHT_COLS) if (!cols.includes(c)) await env.DB.prepare(`ALTER TABLE social_posts ADD COLUMN ${c} ${t}`).run();
+  if (env.KV) await env.KV.put('social:cols:v1', '1');
+}
+const num = v => (v === null || v === undefined || v === '' || !Number.isFinite(+v)) ? undefined : +v;
+const firstVal = d => { const x = (d && d.data && d.data[0]) || {}; return num(x.total_value ? x.total_value.value : x.values && x.values[0] ? x.values[0].value : undefined); };
+// try a list of metric names in one call; if Meta rejects the list, try each on its own
+async function metrics(env, path, names, extra = {}) {
+  const out = {}; let lastErr = '';
+  try {
+    const d = await graph(env, 'GET', path, { metric: names.join(','), ...extra });
+    for (const x of d.data || []) { const v = num(x.total_value ? x.total_value.value : x.values && x.values[0] ? x.values[0].value : undefined); if (v !== undefined) out[x.name] = v; }
+    return { out, err: '' };
+  } catch (e) { lastErr = e.message; }
+  for (const m of names) { try { const v = firstVal(await graph(env, 'GET', path, { metric: m, ...extra })); if (v !== undefined) out[m] = v; } catch (e) { lastErr = e.message; } }
+  return { out, err: Object.keys(out).length ? '' : lastErr };
+}
+export async function fetchInsights(env, p) {
+  const res = {}; const errs = [];
+  if (p.ig_id) {
+    const ig = {};
+    try { const d = await graph(env, 'GET', `/${p.ig_id}`, { fields: 'like_count,comments_count' }); ig.likes = num(d.like_count); ig.comments = num(d.comments_count); } catch (e) { errs.push('Instagram: ' + e.message); }
+    const { out, err } = await metrics(env, `/${p.ig_id}/insights`, ['reach', 'views', 'saved', 'shares', 'total_interactions']);
+    if (err) errs.push('Instagram insights: ' + err);
+    Object.assign(ig, { reach: out.reach, views: out.views, saves: out.saved, shares: out.shares, interactions: out.total_interactions });
+    res.ig = ig;
+  }
+  if (p.fb_id) {
+    const fb = {};
+    if (p.kind === 'reel') {
+      try { const d = await graph(env, 'GET', `/${p.fb_id}`, { fields: 'likes.summary(true).limit(0),comments.summary(true).limit(0)' }); fb.likes = num(d.likes && d.likes.summary && d.likes.summary.total_count); fb.comments = num(d.comments && d.comments.summary && d.comments.summary.total_count); } catch (e) { errs.push('Facebook: ' + e.message); }
+      const { out, err } = await metrics(env, `/${p.fb_id}/video_insights`, ['total_video_views_unique', 'total_video_views']);
+      if (err) errs.push('Facebook insights: ' + err);
+      fb.reach = out.total_video_views_unique; fb.views = out.total_video_views;
+    } else {
+      try { const d = await graph(env, 'GET', `/${p.fb_id}`, { fields: 'reactions.summary(true).limit(0),comments.summary(true).limit(0),shares' }); fb.reactions = num(d.reactions && d.reactions.summary && d.reactions.summary.total_count); fb.comments = num(d.comments && d.comments.summary && d.comments.summary.total_count); fb.shares = num((d.shares || {}).count) ?? 0; } catch (e) { errs.push('Facebook: ' + e.message); }
+      const { out, err } = await metrics(env, `/${p.fb_id}/insights`, ['post_impressions_unique', 'post_clicks']);
+      if (err) errs.push('Facebook insights: ' + err);
+      fb.reach = out.post_impressions_unique; fb.clicks = out.post_clicks;
+    }
+    res.fb = fb;
+  }
+  const strip = o => o && Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined));
+  const out = { fb: strip(res.fb), ig: strip(res.ig) };
+  if (errs.length) out.error = errs.join(' | ').slice(0, 400);
+  await env.DB.prepare('UPDATE social_posts SET insights = ?, insights_at = ? WHERE id = ?').bind(JSON.stringify(out), now(), p.id).run();
+  return out;
+}
+// run hourly from the cron: refresh up to 2 posts that went out in the last 30 days and weren't checked in 6 hours
+export async function refreshInsights(env, limit = 2) {
+  if (!env.META_PAGE_TOKEN) return [];
+  for (const s of SOCIAL_SCHEMA) await env.DB.prepare(s).run();
+  await ensureInsightCols(env);
+  const since = new Date(Date.now() - 30 * 864e5).toISOString(), stale = new Date(Date.now() - 6 * 36e5).toISOString();
+  const rows = (await env.DB.prepare(`SELECT * FROM social_posts WHERE status = 'posted' AND posted_at >= ? AND (insights_at = '' OR insights_at < ?) ORDER BY insights_at, posted_at DESC LIMIT ?`).bind(since, stale, limit).all()).results || [];
+  const done = [];
+  for (const p of rows) done.push(await fetchInsights(env, p).then(r => ({ id: p.id, ...r })).catch(e => ({ id: p.id, error: e.message })));
+  return done;
+}
+
 /* ---------- admin API (session and same-origin already checked by worker.js) ---------- */
 const reply = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } });
 const CTRL = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F‪-‮⁦-⁩]/g;
@@ -140,7 +207,8 @@ const isoOk = v => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.tes
 export async function adminSocial(req, env, id, sub, m, body, log) {
   for (const s of SOCIAL_SCHEMA) await env.DB.prepare(s).run();
   const get = pid => env.DB.prepare('SELECT * FROM social_posts WHERE id = ?').bind(pid).first();
-  const out = p => ({ ...p, media: parse(p.media, []) });
+  await ensureInsightCols(env);
+  const out = p => ({ ...p, media: parse(p.media, []), insights: parse(p.insights || '{}', {}) });
   if (!id) {
     if (m === 'GET') {
       const rows = (await env.DB.prepare(`SELECT * FROM social_posts ORDER BY CASE status WHEN 'needs_approval' THEN 0 WHEN 'failed' THEN 1 WHEN 'publishing' THEN 2 WHEN 'approved' THEN 3 ELSE 4 END, scheduled_at DESC LIMIT 200`).all()).results || [];
@@ -162,6 +230,11 @@ export async function adminSocial(req, env, id, sub, m, body, log) {
   if (!p) return reply({ error: 'That post could not be found.' }, 404);
   const done = ['posted'].includes(p.status);
   if (m === 'GET') return reply({ post: out(p) });
+  if (sub === 'insights' && m === 'POST') {
+    if (!done) return reply({ error: 'Results appear once it has gone out.' }, 409);
+    if (!env.META_PAGE_TOKEN) return reply({ error: 'Facebook and Instagram aren\'t connected yet.' }, 409);
+    await fetchInsights(env, p); return reply({ ok: true, post: out(await get(id)) });
+  }
   if (sub === 'approve' && m === 'POST') {
     if (done) return reply({ error: 'Already posted.' }, 409);
     const err = checkPost(env, p); if (err) return reply({ error: err }, 422);

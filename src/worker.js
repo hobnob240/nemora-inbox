@@ -17,7 +17,7 @@
 // itself is never stored and the hash can't be linked across days or back to a person. Rows are kept 13 months.
 
 import { adminBiz, checkAllSites } from './biz.js';
-import { publishDue } from './social.js';
+import { publishDue, refreshInsights } from './social.js';
 
 const SESSION_TTL = 8 * 60 * 60;
 const COOKIE = '__Host-nemora_admin';
@@ -35,12 +35,14 @@ export default {
     try { return await route(request, env, ctx); }
     catch (err) { console.error(err && err.stack || err); return json({ error: 'Something went wrong on our side. Please try again.' }, 500); }
   },
-  // every 15 minutes: check every client site is up. Daily: delete visit statistics older than 13 months.
+  // every 15 minutes: check every client site is up and publish due social posts; hourly: social post results. Daily: delete visit statistics older than 13 months.
   async scheduled(event, env, ctx) {
     if (!env.DB) return;
     if (event.cron === '17 3 * * *') { ctx.waitUntil(env.DB.prepare('DELETE FROM hits WHERE ts < ?').bind(Date.now() - 400 * 86400000).run()); return; }
     ctx.waitUntil(checkAllSites(env).then(changes => Promise.all(changes.map(c => siteAlert(env, c)))).catch(e => console.error('site checks failed', e)));
     ctx.waitUntil(publishDue(env).then(r => { if (r.length) console.log('social', JSON.stringify(r)); }).catch(e => console.error('social publish failed', e)));
+    // once an hour: fetch reach and engagement for recent posts (kept small to stay well inside subrequest limits)
+    if (new Date(event.scheduledTime || Date.now()).getUTCMinutes() < 15) ctx.waitUntil(refreshInsights(env).then(r => { if (r.length) console.log('social insights', JSON.stringify(r)); }).catch(e => console.error('social insights failed', e)));
   }
 };
 
