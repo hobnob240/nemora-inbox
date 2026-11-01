@@ -22,7 +22,7 @@ sql.exec("CREATE TABLE hits (id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NO
 const stmt = (q, a = []) => ({ q, bind: (...b) => stmt(q, b), async first() { return sql.prepare(q).get(...a) || null; }, async all() { return { results: sql.prepare(q).all(...a) }; }, async run() { sql.prepare(q).run(...a); return { success: true }; } });
 const DB = { prepare: q => stmt(q), async batch(list) { const out = []; for (const x of list) out.push(/^\s*(SELECT|WITH)/i.test(x.q) ? await x.all() : (await x.run(), { results: [] })); return out; } };
 globalThis.__testDB = sql;
-const env = { KV, ASSETS, DB, META_PAGE_TOKEN: process.env.META_PAGE_TOKEN ?? 'test-token', META_API_BASE: 'http://localhost:8802', MEDIA_ORIGIN: 'https://nemora.uk/social/', SETUP_CODE: process.env.SETUP_CODE ?? 'test setup phrase', SITE_ORIGINS: process.env.SITE_ORIGINS || 'https://nemora.uk,http://localhost:8795' };
+const env = { KV, ASSETS, DB, META_PAGE_TOKEN: process.env.META_PAGE_TOKEN ?? 'test-token', META_API_BASE: 'http://localhost:8802', META_APP_ID: process.env.META_APP_ID ?? '', META_APP_SECRET: process.env.META_APP_SECRET ?? '', META_LOGIN_CONFIG_ID: process.env.META_LOGIN_CONFIG_ID ?? '', MEDIA_ORIGIN: 'https://nemora.uk/social/', SETUP_CODE: process.env.SETUP_CODE ?? 'test setup phrase', SITE_ORIGINS: process.env.SITE_ORIGINS || 'https://nemora.uk,http://localhost:8795' };
 const PORT = +process.env.PORT || 8801;
 http.createServer(async (req, res) => {
   const chunks = []; for await (const c of req) chunks.push(c);

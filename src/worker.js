@@ -9,7 +9,8 @@
 //   ALERT_TO        text    optional, where alerts go (default daniel@nemora.uk)
 //   ALERT_FROM      text    optional, a sender on a domain verified in Resend
 //   CF_API_TOKEN    secret  optional, read-only Cloudflare token (Workers Scripts: Read) to list every Worker in the Sites hub
-//   META_PAGE_TOKEN secret  optional, Facebook Page token so the social queue can publish (see src/social.js)
+//   META_APP_ID, META_APP_SECRET, META_LOGIN_CONFIG_ID  for the admin's "Connect Facebook and Instagram" button (see src/social.js)
+//   META_PAGE_TOKEN secret  optional, a hand-made Facebook Page token instead of the button
 //   CF_ACCOUNT_ID   text    optional, the Cloudflare account id that goes with CF_API_TOKEN
 //
 // Visit statistics (D1 binding DB): cookieless. Each page view stores the page, referring site, device type and
@@ -17,7 +18,7 @@
 // itself is never stored and the hash can't be linked across days or back to a person. Rows are kept 13 months.
 
 import { adminBiz, checkAllSites } from './biz.js';
-import { publishDue, refreshInsights } from './social.js';
+import { publishDue, refreshInsights, metaCallback } from './social.js';
 
 const SESSION_TTL = 8 * 60 * 60;
 const COOKIE = '__Host-nemora_admin';
@@ -62,6 +63,7 @@ async function route(req, env, ctx) {
 
   // ---- admin ----
   if (p === '/' ) return redirect(url.origin + '/admin/');
+  if (p === '/meta/callback' && m === 'GET') return metaCallback(req, env, url);
   if (p === '/api/setup-state' && m === 'GET') { const cr = await credentials(env); return json({ needsSetup: !cr.hash, hasCode: !!env.SETUP_CODE }); }
   if (p === '/api/setup') return m === 'POST' ? setup(req, env, url) : notAllowed();
   if (p === '/api/login') return m === 'POST' ? login(req, env, url) : notAllowed();

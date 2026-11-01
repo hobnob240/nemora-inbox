@@ -626,18 +626,18 @@ function resultsCard(p, id) {
   const rows = [i.ig && Object.keys(i.ig).length ? kv('Instagram', resLine(i.ig) || 'No numbers yet') : null, i.fb && Object.keys(i.fb).length ? kv('Facebook', resLine(i.fb) || 'No numbers yet') : null].filter(Boolean);
   return card('Results', [
     rows.length ? h('div', { class: 'kvs' }, rows) : h('p', { class: 'small muted' }, p.insights_at ? 'No numbers from Meta yet.' : 'Results are fetched every hour or so after a post goes out, for 30 days.'),
-    i.error ? h('p', { class: 'small muted' }, /permission|scope|#10\b|#200\b/i.test(i.error) ? 'Meta needs two extra permissions on your Page token to share results: read_insights and instagram_manage_insights. Generate a new token with them (setup step 3) and replace META_PAGE_TOKEN in Cloudflare.' : 'Meta said: ' + i.error) : null,
+    i.error ? h('p', { class: 'small muted' }, /permission|scope|#10\b|#200\b/i.test(i.error) ? 'Meta needs two more permissions to share results: read_insights and instagram_manage_insights. Add them to the app, then tap Reconnect on the Social page and allow everything.' : 'Meta said: ' + i.error) : null,
     h('div', { class: 'actions' }, p.insights_at ? h('span', { class: 'small muted' }, 'Updated ' + at(p.insights_at)) : null, h('button', { class: 'btn btn-sm', onclick: async () => { if (await act(() => api('admin/social/' + id + '/insights', { method: 'POST' }), 'Results updated')) route(); } }, 'Refresh results'))]);
 }
 async function showSocial() {
-  const [{ posts, now }, conn] = await Promise.all([api('admin/social'), api('admin/social/connection').catch(() => ({ connected: false, reason: 'missing' }))]);
+  const [{ posts, now }, conn, pend] = await Promise.all([api('admin/social'), api('admin/social/connection').catch(() => ({ connected: false, reason: 'missing' })), api('admin/social/connect/pending').catch(() => ({ pages: [], error: '' }))]);
   const groups = { needs: x => x.status === 'needs_approval', scheduled: x => ['approved', 'publishing'].includes(x.status), posted: x => x.status === 'posted', back: x => x.status === 'rejected', failed: x => x.status === 'failed', all: () => true };
   if (socialFilter === 'needs' && !posts.some(groups.needs)) socialFilter = posts.some(groups.scheduled) ? 'scheduled' : 'all';
   const list = posts.filter(groups[socialFilter] || groups.all);
   const week = posts.filter(x => x.status === 'posted' && x.posted_at > new Date(Date.now() - 7 * 864e5).toISOString()).length;
   render(
     pageHead('Social', 'Facebook and Instagram', 'Your social media agent plans three posts a week from real work. Videos wait for your OK; photos and text go out on their own once they pass the playbook.'),
-    connCard(conn),
+    connCard(conn, pend),
     h('div', { class: 'tiles' },
       tile('Waiting for you', num(posts.filter(groups.needs).length), 'videos to approve', posts.some(groups.needs) ? 'hero' : ''),
       tile('Scheduled', num(posts.filter(groups.scheduled).length), (() => { const n = posts.filter(groups.scheduled).sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at))[0]; return n ? 'Next ' + at(n.scheduled_at) : 'Nothing queued'; })()),
@@ -649,18 +649,33 @@ async function showSocial() {
         h('p', { class: 'x' }, p.caption), h('span', { class: 'small muted' }, p.status === 'posted' && resShort(p) ? resShort(p) : plat(p.platforms))))))
       : empty('Nothing here yet', posts.length ? null : 'Your social media agent fills this up. Its first run plans the week\'s posts.'));
 }
-function connCard(c) {
-  if (c.connected) return h('div', { class: 'card' }, h('div', { class: 'status-line' }, h('span', { class: 'hdot up' }), h('div', {}, h('strong', {}, 'Connected to ' + (c.pageName || 'your Facebook Page')), h('span', { class: 'small muted' }, c.igConnected ? 'Instagram: @' + c.igName : 'Instagram isn\'t linked to the Page yet, so only Facebook posts go out'))));
+function connCard(c, pend) {
+  pend = pend || { pages: [], error: '' };
+  const origin = location.origin;
+  const start = async (btn) => { btn.disabled = true; const r = await act(() => api('admin/social/connect/start', { method: 'POST' })); if (r && r.url) location.href = r.url; else btn.disabled = false; };
+  if (pend.pages && pend.pages.length) return card('Pick NEMORA\'s Page', [
+    h('p', { class: 'small muted' }, 'Facebook shared these Pages. Choose the one the agent should post to.'),
+    h('div', { class: 'actions' }, pend.pages.map(pg => h('button', { class: 'btn', onclick: async () => { if (await act(() => api('admin/social/connect/choose', { method: 'POST', body: { id: pg.id } }), 'Connected to ' + pg.name)) route(); } },
+      pg.name + (pg.ig ? ' + Instagram @' + pg.ig : ' (no Instagram linked)'))))]);
+  if (c.connected) return h('div', { class: 'card' }, h('div', { class: 'status-line' }, h('span', { class: 'hdot up' }), h('div', {}, h('strong', {}, 'Connected to ' + (c.pageName || 'your Facebook Page')), h('span', { class: 'small muted' }, c.igConnected ? 'Instagram: @' + c.igName : 'Instagram isn\'t linked to the Page yet, so only Facebook posts go out'))),
+    c.via === 'button' ? h('div', { class: 'actions' }, h('button', { class: 'btn btn-sm', onclick: e => start(e.currentTarget) }, 'Reconnect'), h('button', { class: 'btn btn-sm', onclick: async e => { const b = e.currentTarget; if (!b.dataset.sure) { b.dataset.sure = '1'; b.textContent = 'Tap again to disconnect'; return; } if (await act(() => api('admin/social/connect/disconnect', { method: 'POST' }), 'Disconnected')) route(); } }, 'Disconnect')) : null);
+  const err = pend.error || (c.reason === 'error' ? 'Meta said: ' + c.error : '');
+  if (c.canConnect) return card('Connect Facebook and Instagram', [
+    err ? h('div', { class: 'msg err' }, err) : h('p', { class: 'small muted' }, 'Log in with the Facebook account that has full control of the NEMORA Page. When Facebook asks, tick the NEMORA Page and its Instagram account and allow everything.'),
+    h('button', { class: 'btn btn-gold', onclick: e => start(e.currentTarget) }, 'Connect Facebook and Instagram'),
+    h('p', { class: 'small muted' }, 'Your password goes to Facebook, never here. The admin keeps only a Page token, encrypted, and never shows it.')]);
   return card('Connect Facebook and Instagram', [
-    c.reason === 'error' ? h('div', { class: 'msg err' }, 'Meta said: ' + c.error) : h('p', { class: 'small muted' }, 'Posts are queued safely until this is done. You only need to do it once, from a computer. No password is ever stored: just a Page token, kept as a Cloudflare secret.'),
+    err ? h('div', { class: 'msg err' }, err) : h('p', { class: 'small muted' }, 'Posts wait safely until this is done. It\'s a one-off, easiest on a computer.'),
     h('ol', { class: 'small steps-list' },
-      h('li', {}, 'Make sure NEMORA\'s Instagram is a Business account and is linked to the NEMORA Facebook Page (Instagram app: Settings, Account type and tools).'),
-      h('li', {}, 'Go to developers.facebook.com, choose Create app, pick "Other", then "Business". Name it NEMORA Social.'),
-      h('li', {}, 'Open Tools, then Graph API Explorer. Choose your app, then add these permissions: pages_show_list, pages_read_engagement, pages_manage_posts, read_insights, instagram_basic, instagram_content_publish, instagram_manage_insights, business_management. Press Generate Access Token and allow it for the NEMORA Page.'),
-      h('li', {}, 'In Explorer, change "User Token" to the NEMORA Page so it shows a Page token. Open the Access Token Debugger (the blue i), press Extend Access Token, then use that longer token to get a Page token that doesn\'t expire.'),
-      h('li', {}, 'In Cloudflare: Workers, nemora-inbox, Settings, Variables and secrets. Add a Secret called META_PAGE_TOKEN and paste the Page token. Save.'),
-      h('li', {}, 'Come back here and refresh. It should say Connected.')),
-    h('p', { class: 'small muted' }, 'Stuck on a step? Ask Claude and send a screenshot (never the token itself).')]);
+      h('li', {}, 'Instagram app: make NEMORA\'s account a Business account and link it to the NEMORA Facebook Page. Your own Facebook account needs full control of that Page.'),
+      h('li', {}, 'developers.facebook.com: My Apps, Create app. Name it NEMORA Social. Pick the use case "Manage everything on your Page".'),
+      h('li', {}, 'In the app, Use cases: customise that use case and add pages_manage_posts, pages_read_engagement and read_insights. Then Add use case for Instagram ("Manage messaging and content on Instagram", the Facebook login option) and add instagram_basic, instagram_content_publish and instagram_manage_insights.'),
+      h('li', {}, 'Facebook Login for Business, Settings: add this as a Valid OAuth Redirect URI: ' + origin + '/meta/callback'),
+      h('li', {}, 'Facebook Login for Business, Configurations: Create. Token type "User access token", assets Pages and Instagram accounts, tick every permission above. Copy the Configuration ID.'),
+      h('li', {}, 'App settings, Basic: copy the App ID and the App secret.'),
+      h('li', {}, 'Cloudflare: Workers, nemora-inbox, Settings, Variables and secrets. Add three entries, each as type Secret: META_APP_ID, META_APP_SECRET and META_LOGIN_CONFIG_ID. Save and deploy.'),
+      h('li', {}, 'Refresh this page and tap Connect Facebook and Instagram.')),
+    h('p', { class: 'small muted' }, 'The app can stay in Development mode: you\'re its admin, so no Meta review is needed to post to your own Page. Stuck? Send Claude a screenshot, never the App secret.')]);
 }
 async function showPost(id) {
   const { post: p } = await api('admin/social/' + id);
