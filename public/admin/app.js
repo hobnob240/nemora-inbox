@@ -1,5 +1,6 @@
 // NEMORA back office. Everything is drawn with DOM nodes and textContent: no innerHTML, so nothing a visitor or a lead
 // typed can ever run as code here. The page holds no passwords, keys or tokens; the login lives in an HttpOnly cookie.
+import { mountVillage } from './village.js?v=1';
 const $ = s => document.querySelector(s);
 const view = $('#view');
 const render = (...kids) => { view.replaceChildren(); add(view, kids); };
@@ -33,6 +34,7 @@ const ICONS = {
   play: 'M5 3l14 9-14 9V3z',
   builder: 'M3 3h18v18H3z|M3 9h18|M9 9v12',
   builds: 'M3 3h18v18H3z|M3 9h18|M9 9v12',
+  village: 'M3 21h18|M5 21V10l7-6 7 6v11|M10 21v-6h4v6',
   agents: 'M12 8V4H8|M4 8h16v12H4z|M2 14h2|M20 14h2|M9 13v2|M15 13v2',
   boss: 'M2 20h20|M4 20 3 8l5 4 4-7 4 7 5-4-1 12',
   refresh: 'M23 4v6h-6|M1 20v-6h6|M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15',
@@ -153,11 +155,11 @@ const tag = (map, k) => pill((map[k] || [k])[0], (map[k] || [])[1]);
 
 /* ================= shell ================= */
 const NAV = [['home', 'Home'], ['inbox', 'Inbox'], ['leads', 'Leads'], ['sites', 'Sites'], ['work', 'Work'], ['money', 'Money']];
-const SIDE = [['home', 'Home'], ['agents', 'Agents'], ['inbox', 'Inbox'], ['leads', 'Leads'], ['social', 'Social'], ['sites', 'Sites'], ['builds', 'Builder'], ['work', 'Work'], ['money', 'Money']];
+const SIDE = [['home', 'Home'], ['village', 'Village'], ['agents', 'Agents'], ['inbox', 'Inbox'], ['leads', 'Leads'], ['social', 'Social'], ['sites', 'Sites'], ['builds', 'Builder'], ['work', 'Work'], ['money', 'Money']];
 const NAV_MORE = [['visitors', 'Visitors'], ['settings', 'Settings']];
-const MENU = [['agents', 'Agents'], ['builds', 'Builder'], ['social', 'Social'], ['visitors', 'Visitors'], ['settings', 'Settings']];
-const SECTION = { builds: 'builds', agents: 'agents', agent: 'agents', social: 'social', post: 'social', sites: 'sites', site: 'sites', inbox: 'inbox', leads: 'leads', lead: 'leads', work: 'work', project: 'work', client: 'work', clients: 'work', money: 'money', invoice: 'money', visitors: 'visitors', settings: 'settings', activity: 'settings', home: 'home' };
-const TITLES = { builds: 'Builder', agents: 'Agents', social: 'Social', sites: 'Sites', home: 'Home', inbox: 'Inbox', leads: 'Leads', work: 'Work', money: 'Money', visitors: 'Visitors', settings: 'Settings' };
+const MENU = [['village', 'Village'], ['agents', 'Agents'], ['builds', 'Builder'], ['social', 'Social'], ['visitors', 'Visitors'], ['settings', 'Settings']];
+const SECTION = { village: 'village', builds: 'builds', agents: 'agents', agent: 'agents', social: 'social', post: 'social', sites: 'sites', site: 'sites', inbox: 'inbox', leads: 'leads', lead: 'leads', work: 'work', project: 'work', client: 'work', clients: 'work', money: 'money', invoice: 'money', visitors: 'visitors', settings: 'settings', activity: 'settings', home: 'home' };
+const TITLES = { village: 'Village', builds: 'Builder', agents: 'Agents', social: 'Social', sites: 'Sites', home: 'Home', inbox: 'Inbox', leads: 'Leads', work: 'Work', money: 'Money', visitors: 'Visitors', settings: 'Settings' };
 let me = { username: '', unread: 0 };
 function shell() {
   $('#side-nav').replaceChildren(...SIDE.map(([k, l]) => h('a', { href: '#' + k, 'data-k': k }, icon(k), l, k === 'inbox' ? h('span', { class: 'count', hidden: true }) : null)), h('div', { class: 'sep' }), ...NAV_MORE.map(([k, l]) => h('a', { href: '#' + k, 'data-k': k }, icon(k), l)));
@@ -191,7 +193,7 @@ async function route() {
     home: showHome, inbox: id ? () => showMessage(id) : showInbox, leads: showLeads, lead: () => showLead(id),
     work: () => showWork('projects'), clients: () => showWork('clients'),
     project: () => id === 'new' ? editProject(null, extra) : showProject(id), client: () => id === 'new' ? editClient(null) : showClient(id),
-    builds: showBuilds,
+    builds: showBuilds, village: () => showVillage(id),
     agents: showAgents, agent: () => showAgent(id),
     social: showSocial, post: () => showPost(id),
     sites: showSites, site: () => id === 'new' ? editSite(null, extra) : showSite(id),
@@ -636,6 +638,51 @@ function resultsCard(p, id) {
     i.error ? h('p', { class: 'small muted' }, /permission|scope|#10\b|#200\b/i.test(i.error) ? 'Meta needs two more permissions to share results: read_insights and instagram_manage_insights. Add them to the app, then tap Reconnect on the Social page and allow everything.' : 'Meta said: ' + i.error) : null,
     h('div', { class: 'actions' }, p.insights_at ? h('span', { class: 'small muted' }, 'Updated ' + at(p.insights_at)) : null, h('button', { class: 'btn btn-sm', onclick: async () => { if (await act(() => api('admin/social/' + id + '/insights', { method: 'POST' }), 'Results updated')) route(); } }, 'Refresh results'))]);
 }
+/* ================= village ================= */
+let villageTown = 'NEMORA', villageSel = '', villageApp = null;
+async function showVillage(pick) {
+  const d = await api('admin/agents');
+  if (pick) villageSel = pick;
+  const towns = [...new Set(['NEMORA', ...d.agents.map(a => a.business || 'NEMORA')])];
+  if (!towns.includes(villageTown)) villageTown = 'NEMORA';
+  const here = d.agents.filter(a => (a.business || 'NEMORA') === villageTown);
+  const panel = h('div', { class: 'village-panel' });
+  const showPanel = a => {
+    villageSel = a ? a.id : '';
+    panel.replaceChildren();
+    if (!a) { panel.append(h('p', { class: 'small muted' }, 'Tap anyone in the village to see what they do, when they work next and what they last did.')); return; }
+    const card = agentCard(a);
+    if (a.health === 'hiring') card.append(h('p', { class: 'small muted' }, 'Waiting at the gate. The Boss sets them up tomorrow morning at 7:52 and tells you when they start.'));
+    if (!a.seeded) { const box = confirmBox(a.health === 'hiring' ? 'Cancel this new agent before they start?' : 'Retire ' + a.name + '? The Boss switches their scheduled task off tomorrow morning.', a.health === 'hiring' ? 'Cancel them' : 'Retire', async () => { if (await act(() => api('admin/agents/' + a.id + '/retire', { method: 'POST' }), a.health === 'hiring' ? 'Cancelled' : 'Retiring')) { villageSel = ''; route(); } }); card.append(h('div', { class: 'actions' }, h('button', { class: 'btn btn-sm btn-ghost', onclick: () => box.hidden = false }, a.health === 'hiring' ? 'Cancel' : 'Retire'), box)); }
+    panel.append(card);
+  };
+  // the hiring form
+  const looks = [0, 1, 2, 3, 4, 5]; let look = String(Math.floor(Math.random() * 6));
+  const swatches = h('div', { class: 'swatches', role: 'radiogroup', 'aria-label': 'Their look' }, looks.map(n => { const b = h('button', { type: 'button', class: 'swatch sw' + n, role: 'radio', 'aria-checked': String(String(n) === look), 'aria-label': 'Look ' + (n + 1) }); b.onclick = () => { look = String(n); swatches.querySelectorAll('.swatch').forEach(x => x.setAttribute('aria-checked', String(x === b))); }; return b; }));
+  const f = form([
+    { k: 'name', label: 'Their name', placeholder: 'e.g. Sky', hint: 'What you\'ll call them in the village.' },
+    { k: 'business', label: 'Which business', placeholder: 'NEMORA', hint: 'Use a new name to start a new village for that business.', value: villageTown },
+    { k: 'template', label: 'Job', type: 'select', options: d.templates.map(t => [t.id, t.label]) },
+    { k: 'schedule', label: 'When they work', type: 'select', options: d.schedules.map(x => [x.id, x.label]) },
+    { k: 'instructions', label: 'What they should do, in your words', type: 'textarea', rows: 5, placeholder: 'e.g. Post 3 times a week for Spitfire Comedy using photos from their shows. Never mention ticket prices.' }
+  ], {}, { title: 'Hire an agent', submit: 'Hire them', after: h('div', { class: 'field' }, h('span', { class: 'label' }, 'Their look'), swatches, h('p', { class: 'small muted' }, 'They wait at the village gate, and the Boss sets them up tomorrow at 7:52am with the standard rules: honest, logged, and checked every morning. Anything that needs a client\'s accounts waits until those are connected.')),
+    onSave: async v => { const r = await api('admin/agents', { method: 'POST', body: { ...v, look } }); toast(r.agent.name + ' is waiting at the gate'); villageTown = r.agent.business; villageSel = r.agent.id; route(); }, onCancel: () => { f.el.hidden = true; } });
+  f.el.hidden = true;
+  const stage = h('div', { class: 'village-stage' });
+  const counts = { busy: 0, trouble: here.filter(a => ['missed', 'failed', 'attention'].includes(a.health)).length, asleep: here.filter(a => !a.enabled && a.health !== 'hiring').length, hiring: here.filter(a => a.health === 'hiring').length };
+  render(
+    pageHead('Village', villageTown === 'NEMORA' ? 'Your AI village' : villageTown + ' village', 'Everyone who works for you, living in one little town. Busy agents are inside with the lights on, paused ones are asleep, and anyone who needs you has a red "!".', [h('button', { class: 'btn btn-gold', onclick: () => { f.el.hidden = false; f.els.name.focus(); } }, 'Hire an agent')]),
+    towns.length > 1 ? chipsRow(towns.map(t => [t, t, d.agents.filter(a => (a.business || 'NEMORA') === t).length]), villageTown, t => { villageTown = t; villageSel = ''; showVillage(); }) : null,
+    f.el,
+    stage,
+    h('div', { class: 'village-legend small muted' },
+      h('span', {}, h('i', { class: 'lg busy' }), 'Working'), h('span', {}, h('i', { class: 'lg asleep' }), 'Paused (asleep)'), h('span', {}, h('i', { class: 'lg trouble' }), 'Needs you'), h('span', {}, h('i', { class: 'lg hiring' }), 'Waiting to be hired'),
+      counts.trouble ? h('strong', {}, plural(counts.trouble, 'agent') + (counts.trouble === 1 ? ' needs you' : ' need you')) : null),
+    panel);
+  if (villageApp) villageApp.destroy();
+  villageApp = mountVillage(stage, here, { onSelect: showPanel, selected: villageSel, reduced: matchMedia('(prefers-reduced-motion: reduce)').matches });
+  showPanel(here.find(a => a.id === villageSel) || null);
+}
 /* ================= site builder ================= */
 async function showBuilds() {
   const [{ builds }, pj] = await Promise.all([api('admin/builds'), api('admin/projects').catch(() => ({ projects: [] }))]);
@@ -711,7 +758,7 @@ async function showAgents() {
       boss ? agentCard(boss, true) : null,
       h('div', { class: 'org-line', 'aria-hidden': 'true' }),
       h('div', { class: 'org-team' }, team.map(a => agentCard(a)))),
-    h('p', { class: 'small muted' }, 'You talk to all of them through Claude in your chat: ask there to change what an agent does.'));
+    h('p', { class: 'small muted' }, 'You talk to all of them through Claude in your chat: ask there to change what an agent does. ', h('a', { href: '#village' }, 'See them in the village')));
 }
 async function showAgent(id) {
   const { agent: a, runs } = await api('admin/agents/' + id);

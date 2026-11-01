@@ -35,14 +35,31 @@ const TEAM = [
 ];
 
 const now = () => new Date().toISOString();
+const clean = (v, max) => String(v == null ? '' : v).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').trim().slice(0, max);
+// what Charlie can hire from the village. The Boss turns the brief into a scheduled task with the standard rules.
+export const TEMPLATES = [
+  { id: 'social', label: 'Social media manager', role: 'Facebook and Instagram', job: 'Plans and makes honest posts from real material for the business, three a week, with videos waiting for approval.', duties: ['Plans the week', 'Makes photos, carousels and videos', 'Posts only from real material', 'Needs the business\'s Facebook and Instagram connected'] },
+  { id: 'writer', label: 'Blog and guides writer', role: 'Writes for the website', job: 'Researches and writes useful, sourced articles for the business\'s website.', duties: ['Picks useful topics', 'Researches from reliable sources', 'Writes in the business\'s voice', 'Needs access to the website\'s code'] },
+  { id: 'reviews', label: 'Reviews helper', role: 'Reviews and reputation', job: 'Watches for new reviews and drafts friendly replies for approval.', duties: ['Spots new reviews', 'Drafts replies for approval', 'Flags unhappy customers', 'Needs the business\'s review accounts'] },
+  { id: 'research', label: 'Researcher', role: 'Finds things out', job: 'Researches a question on a schedule and writes a short, sourced report.', duties: ['Searches the web', 'Checks sources', 'Writes a short report', 'Sends you the highlights'] },
+  { id: 'custom', label: 'Something else', role: 'Custom agent', job: '', duties: ['Does what you describe', 'Follows the standard rules', 'Logs every run', 'Checked by the Boss'] }
+];
+export const SCHEDULES = [
+  ['daily', 'Every day at 9:41am', '41 9 * * *'], ['weekdays', 'Weekdays at 9:41am', '41 9 * * 1-5'], ['twice-week', 'Mondays and Thursdays at 11:23am', '23 11 * * 1,4'],
+  ['weekly', 'Mondays at 10:17am', '17 10 * * 1'], ['fortnight', 'The 1st and 15th at 10:29am', '29 10 1,15 * *'], ['monthly', 'The 1st of each month at 10:47am', '47 10 1 * *']
+];
 const reply = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } });
 
 let ready = false;
 export async function ensureAgents(env) {
   if (ready) return;
   for (const s of AGENTS_SCHEMA) await env.DB.prepare(s).run();
+  const cols = ((await env.DB.prepare('PRAGMA table_info(agents)').all()).results || []).map(c => c.name);
+  for (const [c, def] of [['business', "TEXT NOT NULL DEFAULT 'NEMORA'"], ['status', "TEXT NOT NULL DEFAULT 'active'"], ['brief', "TEXT NOT NULL DEFAULT ''"], ['look', "TEXT NOT NULL DEFAULT ''"], ['seeded', 'INTEGER NOT NULL DEFAULT 0']])
+    if (!cols.includes(c)) await env.DB.prepare(`ALTER TABLE agents ADD COLUMN ${c} ${def}`).run();
   const st = env.DB.prepare('INSERT OR IGNORE INTO agents (id, name, role, job, duties, kind, cron, schedule_text, trigger_id, reports_to, sort, updated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
   await env.DB.batch(TEAM.map(a => st.bind(a.id, a.name, a.role, a.job, JSON.stringify(a.duties), a.kind, a.cron, a.schedule_text, a.trigger_id, a.reports_to ?? 'boss', a.sort, now())));
+  await env.DB.prepare("UPDATE agents SET seeded = 1 WHERE id IN ('boss','outreach','replies','social','care','guides','autopilot')").run();
   ready = true;
 }
 
@@ -77,7 +94,7 @@ export function cronStep(cron, tz, from, dir = 1) {
 
 /* ---------- the view ---------- */
 async function team(env) {
-  const rows = (await env.DB.prepare('SELECT * FROM agents ORDER BY sort, name').all()).results || [];
+  const rows = (await env.DB.prepare("SELECT * FROM agents WHERE status != 'retired' ORDER BY sort, name").all()).results || [];
   const since = new Date(Date.now() - 14 * 864e5).toISOString();
   const runs = (await env.DB.prepare('SELECT agent, status, COUNT(*) n FROM agent_runs WHERE finished >= ? GROUP BY agent, status').bind(since).all()).results || [];
   const t = new Date();
@@ -86,23 +103,48 @@ async function team(env) {
     const prev = cronStep(a.cron, a.tz, t, -1);
     // missed: it should have run more than 40 minutes ago (2 hours for the autopilot's 15-minute beat is plenty) and hasn't since
     const grace = a.kind === 'system' ? 45 : 40;
-    const missed = !!(a.enabled && prev && Date.now() - Date.parse(prev) > grace * 60000 && (!a.last_run || Date.parse(a.last_run) < Date.parse(prev) - 5 * 60000) && Date.parse(a.updated || 0) < Date.parse(prev));
-    const health = !a.enabled ? 'paused' : missed ? 'missed' : ['failed', 'attention'].includes(a.last_status) ? a.last_status : a.last_run ? 'ok' : 'waiting';
+    const missed = !!(a.status === 'active' && a.enabled && prev && Date.now() - Date.parse(prev) > grace * 60000 && (!a.last_run || Date.parse(a.last_run) < Date.parse(prev) - 5 * 60000) && Date.parse(a.updated || 0) < Date.parse(prev));
+    const health = a.status === 'hiring' ? 'hiring' : a.status === 'retiring' ? 'retiring' : !a.enabled ? 'paused' : missed ? 'missed' : ['failed', 'attention'].includes(a.last_status) ? a.last_status : a.last_run ? 'ok' : 'waiting';
     const stats = Object.fromEntries(runs.filter(r => r.agent === a.id).map(r => [r.status, r.n]));
-    return { ...a, duties: JSON.parse(a.duties || '[]'), enabled: !!a.enabled, next, prev, health, stats };
+    let brief = {}; try { brief = JSON.parse(a.brief || '{}'); } catch (e) {}
+    return { ...a, brief, duties: JSON.parse(a.duties || '[]'), enabled: !!a.enabled, seeded: !!a.seeded, next: a.status === 'active' ? next : '', prev, health, stats };
   });
 }
 
 export async function adminAgents(env, id, sub, m, body, log) {
   await ensureAgents(env);
-  if (!id && m === 'GET') return reply({ agents: await team(env), now: now() });
+  if (!id && m === 'GET') return reply({ agents: await team(env), now: now(), templates: TEMPLATES, schedules: SCHEDULES.map(([k, l]) => ({ id: k, label: l })) });
+  if (!id && m === 'POST') {
+    // Charlie designs a new agent in the village; the Boss sets it up as a scheduled task next morning
+    const name = clean(body.name, 40), business = clean(body.business, 80) || 'NEMORA', tpl = TEMPLATES.find(t => t.id === body.template) || TEMPLATES[TEMPLATES.length - 1];
+    const sch = SCHEDULES.find(([k]) => k === body.schedule); const job = clean(body.job, 400) || tpl.job, instructions = clean(body.instructions, 3000);
+    if (!name) return reply({ error: 'Give your new agent a name.' }, 422);
+    if (!sch) return reply({ error: 'Choose when it should work.' }, 422);
+    if (tpl.id === 'custom' && !instructions) return reply({ error: 'Tell it what to do: a few lines in your own words.' }, 422);
+    const aid = 'h_' + [...crypto.getRandomValues(new Uint8Array(5))].map(b => b.toString(16).padStart(2, '0')).join('');
+    const look = clean(body.look, 20) || String(Math.floor(Math.random() * 6));
+    const brief = { template: tpl.id, job, instructions, business, requested: now() };
+    const sort = ((await env.DB.prepare('SELECT MAX(sort) m FROM agents').first()) || {}).m || 10;
+    await env.DB.prepare("INSERT INTO agents (id, name, role, job, duties, kind, cron, schedule_text, trigger_id, reports_to, enabled, sort, business, status, brief, look, updated) VALUES (?, ?, ?, ?, ?, 'claude', ?, ?, '', 'boss', 0, ?, ?, 'hiring', ?, ?, ?)")
+      .bind(aid, name, tpl.role, job, JSON.stringify(tpl.duties), sch[2], sch[1], sort + 1, business, JSON.stringify(brief), look, now()).run();
+    await log('Designed a new agent: ' + name + ' (' + business + ')');
+    return reply({ agent: (await team(env)).find(x => x.id === aid) });
+  }
   const a = await env.DB.prepare('SELECT * FROM agents WHERE id = ?').bind(String(id)).first();
   if (!a) return reply({ error: 'That agent could not be found.' }, 404);
   if (m === 'GET') {
     const runs = (await env.DB.prepare('SELECT * FROM agent_runs WHERE agent = ? ORDER BY finished DESC LIMIT 40').bind(a.id).all()).results || [];
     return reply({ agent: (await team(env)).find(x => x.id === a.id), runs });
   }
+  if (sub === 'retire' && m === 'POST') {
+    if (a.seeded) return reply({ error: 'The core team can be paused but not retired here. Ask Claude if you really want to remove one.' }, 409);
+    const st = a.status === 'hiring' || !a.trigger_id ? 'retired' : 'retiring';
+    await env.DB.prepare('UPDATE agents SET status = ?, enabled = 0, updated = ? WHERE id = ?').bind(st, now(), a.id).run();
+    await log((st === 'retired' ? 'Cancelled the new agent ' : 'Retired the agent ') + a.name);
+    return reply({ ok: true, status: st });
+  }
   if (m === 'PATCH' && body.enabled !== undefined) {
+    if (a.status === 'hiring') return reply({ error: 'The Boss sets this one up tomorrow morning. You can switch it on and off after that.' }, 409);
     if (a.kind === 'system') return reply({ error: 'The Autopilot is part of the admin and stays on. Pause the Social media agent to stop posts going out.' }, 409);
     const on = body.enabled ? 1 : 0;
     await env.DB.prepare('UPDATE agents SET enabled = ?, updated = ? WHERE id = ?').bind(on, now(), a.id).run();
