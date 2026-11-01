@@ -143,6 +143,13 @@ export async function adminAgents(env, id, sub, m, body, log) {
     await log((st === 'retired' ? 'Cancelled the new agent ' : 'Retired the agent ') + a.name);
     return reply({ ok: true, status: st });
   }
+  if (m === 'PATCH' && body.look !== undefined) {
+    // Charlie dresses the agent: numbers only, each within its list
+    const L = { skin: 5, hair: 8, style: 6, shirt: 8, legs: 4, acc: 6 }, look = {};
+    for (const [k, n] of Object.entries(L)) { const v = Math.floor(Number((body.look || {})[k])); look[k] = Number.isFinite(v) && v >= 0 && v < n ? v : 0; }
+    await env.DB.prepare('UPDATE agents SET look = ? WHERE id = ?').bind(JSON.stringify(look), a.id).run();
+    return reply({ ok: true, look });
+  }
   if (m === 'PATCH' && body.enabled !== undefined) {
     if (a.status === 'hiring') return reply({ error: 'The Boss sets this one up tomorrow morning. You can switch it on and off after that.' }, 409);
     if (a.kind === 'system') return reply({ error: 'The Autopilot is part of the admin and stays on. Pause the Social media agent to stop posts going out.' }, 409);
@@ -177,4 +184,24 @@ export async function autopilotBeat(env, status, summary) {
     await env.DB.prepare('INSERT INTO agent_runs (agent, started, finished, status, summary) VALUES (?, ?, ?, ?, ?)').bind('autopilot', t, t, status, summary.slice(0, 300)).run();
     await env.DB.prepare("DELETE FROM agent_runs WHERE finished < ?").bind(new Date(Date.now() - 120 * 864e5).toISOString()).run();
   }
+}
+
+/* ---------- the village's decorations (one set per business) ---------- */
+const TOWN_KEYS = ['tree', 'pine', 'bush', 'flowers', 'bench', 'lamp', 'pond', 'rock', 'stall', 'statue', 'mailbox', 'sign', 'flag', 'table', 'cat', 'car'];
+const ROOM_KEYS = ['plant', 'rug', 'shelf', 'lampf', 'sofa', 'picture', 'trophy', 'coffee', 'cat', 'board', 'clock', 'bin'];
+const int = (v, lo, hi) => { const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.max(lo, Math.min(hi, n)) : lo; };
+const items = (list, keys, w, h, max) => (Array.isArray(list) ? list : []).filter(i => i && keys.includes(i.k)).slice(0, max).map(i => ({ k: i.k, x: int(i.x, 0, w), y: int(i.y, 0, h) }));
+export async function adminVillage(env, url, m, body, log) {
+  await ensureAgents(env);
+  const biz = clean(url.searchParams.get('b') || body.business || 'NEMORA', 80) || 'NEMORA', key = 'village:' + biz.toLowerCase();
+  if (m === 'GET') { const row = await env.DB.prepare('SELECT value FROM config WHERE key = ?').bind(key).first(); let v = {}; try { v = JSON.parse((row || {}).value || '{}'); } catch (e) {} return reply({ business: biz, decor: v }); }
+  if (m === 'PUT') {
+    const d = body.decor || {}, out = {};
+    if (Array.isArray(d.items)) out.items = items(d.items, TOWN_KEYS, 480, 272, 250);
+    out.houses = {}; for (const [id, hs] of Object.entries(d.houses || {}).slice(0, 60)) if (/^[a-z0-9_]{1,40}$/.test(id)) out.houses[id] = { wall: hs.wall == null ? null : int(hs.wall, 0, 9), roof: hs.roof == null ? null : int(hs.roof, 0, 9), door: /^#[0-9a-f]{6}$/i.test(hs.door || '') ? hs.door : undefined };
+    out.rooms = {}; for (const [id, r] of Object.entries(d.rooms || {}).slice(0, 60)) if (/^[a-z0-9_]{1,40}$/.test(id)) out.rooms[id] = { floor: int(r.floor, 0, 5), paper: int(r.paper, 0, 5), items: items(r.items, ROOM_KEYS, 240, 144, 40) };
+    await env.DB.prepare('INSERT INTO config (key, value, updated) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated = excluded.updated').bind(key, JSON.stringify(out), now()).run();
+    return reply({ ok: true, decor: out });
+  }
+  return reply({ error: 'Not found.' }, 404);
 }

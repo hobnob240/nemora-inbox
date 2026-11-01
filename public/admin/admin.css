@@ -389,3 +389,25 @@ video.pv{aspect-ratio:9/16;max-height:72vh;width:auto;max-width:100%;margin:0 au
 .swatch[aria-checked="true"]{border-color:var(--ink);box-shadow:0 0 0 3px var(--gold-wash)}
 .swatch:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 .sw0{background:#3f6fd8}.sw1{background:#d84f4f}.sw2{background:#3fae6a}.sw3{background:#e0a33a}.sw4{background:#8a58d6}.sw5{background:#2fb3b3}
+.village.editing canvas{cursor:crosshair}
+.village-tools,.room-tools{display:grid;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:14px}
+.room-tools{border:0;padding:0;background:none}
+.palette{display:flex;flex-wrap:wrap;gap:6px}
+.pal-item{display:flex;flex-direction:column;align-items:center;gap:3px;width:72px;padding:6px 4px;border:1px solid var(--line);border-radius:10px;background:var(--surface-2);color:var(--ink);font-size:.7rem;font-weight:600;cursor:pointer;text-align:center}
+.pal-item canvas{width:32px;height:32px;image-rendering:pixelated}
+.pal-item[aria-checked="true"]{border-color:var(--gold);box-shadow:0 0 0 2px var(--gold-wash)}
+.pal-item:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.pal-x{display:grid;place-items:center;width:32px;height:32px;font-size:22px;color:var(--bad)}
+.village-who{display:flex;align-items:center;gap:12px}
+.village-who canvas{width:48px;height:66px;image-rendering:pixelated;background:var(--gold-wash);border-radius:12px}
+.village-who h2{margin:0;font-size:1.2rem}
+.village-card{gap:12px}
+.room{width:100%;max-width:720px;height:auto;image-rendering:pixelated;border-radius:12px;border:1px solid var(--line);display:block}
+.deco-row{display:grid;grid-template-columns:110px minmax(0,1fr);gap:10px;align-items:center}
+.deco-row .chips{flex-wrap:wrap;margin:0}
+.swatch{width:30px;height:30px}
+.look-grid{display:grid;grid-template-columns:auto minmax(0,1fr);gap:20px;align-items:start}
+.look-preview{background:linear-gradient(#cfe3f2,#e9f2f8 60%,#7fb05a 60%);border-radius:14px;padding:12px 18px;display:grid;place-items:center}
+.look-preview canvas{width:96px;height:132px;image-rendering:pixelated}
+.look-rows{display:grid;gap:10px;min-width:0}
+@media (max-width:560px){.look-grid{grid-template-columns:1fr}.deco-row{grid-template-columns:1fr}.pal-item{width:64px}}

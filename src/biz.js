@@ -4,7 +4,7 @@
 // SQL always uses bound parameters.
 
 import { adminSocial, SOCIAL_SCHEMA } from './social.js';
-import { adminAgents, agentAlerts } from './agents.js';
+import { adminAgents, agentAlerts, adminVillage } from './agents.js';
 
 export const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS leads (id TEXT PRIMARY KEY, name TEXT NOT NULL, type TEXT NOT NULL DEFAULT '', area TEXT NOT NULL DEFAULT '', country TEXT NOT NULL DEFAULT 'UK', status TEXT NOT NULL DEFAULT 'check', channel TEXT NOT NULL DEFAULT '', legal TEXT NOT NULL DEFAULT '', email TEXT NOT NULL DEFAULT '', phone TEXT NOT NULL DEFAULT '', website TEXT NOT NULL DEFAULT '', address TEXT NOT NULL DEFAULT '', socials TEXT NOT NULL DEFAULT '', reviews INTEGER NOT NULL DEFAULT 0, fit INTEGER NOT NULL DEFAULT 0, package TEXT NOT NULL DEFAULT '', pitch TEXT NOT NULL DEFAULT '', notes TEXT NOT NULL DEFAULT '', next TEXT NOT NULL DEFAULT '', source TEXT NOT NULL DEFAULT '', found TEXT NOT NULL DEFAULT '', vetted TEXT NOT NULL DEFAULT '', updated TEXT NOT NULL DEFAULT '')`,
@@ -110,7 +110,7 @@ const plusDays = (iso, n) => { const d = new Date(iso + 'T12:00:00Z'); d.setUTCD
 // returns a Response, or null if the path isn't a business route
 export async function adminBiz(req, env, path, m, readJson, log, user, extra) {
   const parts = path.split('/'), [res, id, sub] = parts;
-  if (!['dashboard', 'leads', 'outbox', 'clients', 'projects', 'invoices', 'reports', 'settings', 'rulebook', 'sites', 'worklog', 'cf', 'social', 'agents'].includes(res)) return null;
+  if (!['dashboard', 'leads', 'outbox', 'clients', 'projects', 'invoices', 'reports', 'settings', 'rulebook', 'sites', 'worklog', 'cf', 'social', 'agents', 'village'].includes(res)) return null;
   if (!env.DB) return reply({ error: 'The database is not connected. Add the D1 binding called DB in Cloudflare.' }, 503);
   await ensureBizSchema(env);
   try {
@@ -126,6 +126,7 @@ export async function adminBiz(req, env, path, m, readJson, log, user, extra) {
     if (res === 'invoices') return await invoices(env, id, m, body, log);
     if (res === 'reports' && m === 'GET') return reply({ reports: (await all(env, 'SELECT * FROM reports ORDER BY date DESC, type LIMIT 60')).map(r => ({ ...r, needs_you: parseJSON(r.needs_you, []), highlights: parseJSON(r.highlights, []) })) });
     if (res === 'agents') return await adminAgents(env, id, sub, m, body, log);
+    if (res === 'village') return await adminVillage(env, new URL(req.url), m, body, log);
     if (res === 'social') return await adminSocial(req, env, id, sub, m, body, log);
     if (res === 'sites') return await sites(env, id, sub, m, body, log);
     if (res === 'worklog' && id && m === 'DELETE') { await run(env, 'DELETE FROM worklog WHERE id = ?', Number(id) || 0); return reply({ ok: true }); }

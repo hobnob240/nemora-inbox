@@ -1,6 +1,6 @@
 // NEMORA back office. Everything is drawn with DOM nodes and textContent: no innerHTML, so nothing a visitor or a lead
 // typed can ever run as code here. The page holds no passwords, keys or tokens; the login lives in an HttpOnly cookie.
-import { mountVillage } from './village.js?v=1';
+import { mountVillage, drawRoom, RW, RH, lookOf, personIcon, itemIcon, LOOK, WALLS, ROOFS, FLOORS, PAPERS, TOWN_ITEMS, ROOM_ITEMS, STARTER_DECOR } from './village.js?v=2';
 const $ = s => document.querySelector(s);
 const view = $('#view');
 const render = (...kids) => { view.replaceChildren(); add(view, kids); };
@@ -639,48 +639,127 @@ function resultsCard(p, id) {
     h('div', { class: 'actions' }, p.insights_at ? h('span', { class: 'small muted' }, 'Updated ' + at(p.insights_at)) : null, h('button', { class: 'btn btn-sm', onclick: async () => { if (await act(() => api('admin/social/' + id + '/insights', { method: 'POST' }), 'Results updated')) route(); } }, 'Refresh results'))]);
 }
 /* ================= village ================= */
-let villageTown = 'NEMORA', villageSel = '', villageApp = null;
+let villageTown = 'NEMORA', villageSel = '', villageApp = null, villageTab = 'house', villageEdit = null, roomEdit = null, roomRaf = 0;
 async function showVillage(pick) {
   const d = await api('admin/agents');
   if (pick) villageSel = pick;
   const towns = [...new Set(['NEMORA', ...d.agents.map(a => a.business || 'NEMORA')])];
   if (!towns.includes(villageTown)) villageTown = 'NEMORA';
   const here = d.agents.filter(a => (a.business || 'NEMORA') === villageTown);
+  const { decor } = await api('admin/village?b=' + encodeURIComponent(villageTown));
+  decor.houses = decor.houses || {}; decor.rooms = decor.rooms || {};
+  let saveT = 0;
+  const saveDecor = () => { clearTimeout(saveT); saveT = setTimeout(() => act(() => api('admin/village', { method: 'PUT', body: { business: villageTown, decor } })), 600); };
+
   const panel = h('div', { class: 'village-panel' });
+  const stage = h('div', { class: 'village-stage' });
+  const tools = h('div', { class: 'village-tools', hidden: !villageEdit });
+  const mount = () => { if (villageApp) villageApp.destroy(); villageApp = mountVillage(stage, here, { onSelect: a => { villageSel = a.id; showPanel(a); }, selected: villageSel, reduced: matchMedia('(prefers-reduced-motion: reduce)').matches, decor, edit: villageEdit }); };
+
+  // decorating the town
+  const drawTools = () => {
+    tools.replaceChildren(
+      h('p', { class: 'small muted' }, 'Pick something, then tap the grass to put it there. Choose Remove and tap a thing to take it away. Changes save by themselves.'),
+      h('div', { class: 'palette', role: 'radiogroup', 'aria-label': 'Decorations' },
+        [['remove', 'Remove']].concat(TOWN_ITEMS).map(([k, l]) => h('button', { type: 'button', class: 'pal-item', role: 'radio', 'aria-checked': String(!!villageEdit && villageEdit.tool === k), onclick: () => { villageEdit.tool = k; drawTools(); } }, k === 'remove' ? h('span', { class: 'pal-x', 'aria-hidden': 'true' }, '×') : itemIcon(k), h('span', {}, l)))),
+      h('div', { class: 'actions' },
+        h('button', { class: 'btn btn-sm', onclick: () => { decor.items = []; saveDecor(); } }, 'Clear the town'),
+        h('button', { class: 'btn btn-sm', onclick: () => { decor.items = STARTER_DECOR.map(x => ({ ...x })); saveDecor(); } }, 'Start again'),
+        h('button', { class: 'btn btn-sm btn-gold', onclick: () => stopEdit() }, 'Done')));
+  };
+  const stopEdit = () => { villageEdit = null; tools.hidden = true; editBtn.textContent = 'Decorate the town'; mount(); };
+  const editBtn = h('button', { class: 'btn', onclick: () => {
+    if (villageEdit) { stopEdit(); return; }
+    if (!decor.items) decor.items = STARTER_DECOR.map(x => ({ ...x }));
+    villageEdit = { tool: 'tree', onChange: () => saveDecor() }; tools.hidden = false; editBtn.textContent = 'Stop decorating'; drawTools(); mount();
+  } }, villageEdit ? 'Stop decorating' : 'Decorate the town');
+  if (villageEdit) { villageEdit.onChange = () => saveDecor(); drawTools(); }
+
+  // one agent: their house (inside), their look, their details
   const showPanel = a => {
-    villageSel = a ? a.id : '';
+    cancelAnimationFrame(roomRaf); roomEdit = null;
     panel.replaceChildren();
-    if (!a) { panel.append(h('p', { class: 'small muted' }, 'Tap anyone in the village to see what they do, when they work next and what they last did.')); return; }
+    if (!a) { panel.append(h('p', { class: 'small muted' }, 'Tap anyone in the village to look inside their house, dress them up or see what they do.')); return; }
+    const tabs = chipsRow([['house', 'Their house'], ['look', 'Their look'], ['about', 'What they do']], villageTab, k => { villageTab = k; showPanel(a); });
+    const body = h('div', { class: 'card village-card' });
+    panel.append(h('div', { class: 'village-who' }, personIcon(lookOf(a), 3), h('div', {}, h('h2', {}, a.name), h('span', { class: 'small muted' }, a.role || ''))), tabs, body);
+    if (villageTab === 'house') houseTab(a, body);
+    else if (villageTab === 'look') lookTab(a, body);
+    else aboutTab(a, body);
+  };
+  const houseTab = (a, body) => {
+    cancelAnimationFrame(roomRaf);
+    const room = decor.rooms[a.id] = decor.rooms[a.id] || { floor: 0, paper: 0, items: [] };
+    const hs = decor.houses[a.id] = decor.houses[a.id] || {};
+    const cv = h('canvas', { width: RW, height: RH, class: 'room', role: 'img', 'aria-label': 'Inside ' + a.name + "'s house" });
+    const g = cv.getContext('2d');
+    const loop = t => { if (!document.body.contains(cv)) return; drawRoom(g, a, { ...room, floor: FLOORS[room.floor], paper: PAPERS[room.paper] }, t, !!roomEdit); roomRaf = requestAnimationFrame(loop); };
+    roomRaf = requestAnimationFrame(loop);
+    cv.addEventListener('click', e => {
+      if (!roomEdit) return; const b = cv.getBoundingClientRect(); const x = Math.round((e.clientX - b.left) / b.width * RW), y = Math.round((e.clientY - b.top) / b.height * RH);
+      const i = room.items.findIndex(it => Math.abs(it.x - x) < 12 && Math.abs(it.y - y) < 12);
+      if (roomEdit.tool === 'remove') { if (i >= 0) room.items.splice(i, 1); else return; }
+      else if (room.items.length < 40) room.items.push({ k: roomEdit.tool, x, y });
+      saveDecor();
+    });
+    const busy = a.last_run && Date.now() - Date.parse(a.last_run) < 20 * 60000 && a.enabled;
+    const m = a.health === 'hiring' ? 'Waiting at the gate: the Boss moves them in tomorrow morning.' : !a.enabled ? 'Paused, so they\'re asleep.' : busy ? 'Working at their desk right now.' : ['missed', 'failed', 'attention'].includes(a.health) ? 'Something needs you: see What they do.' : a.next ? 'Next at their desk ' + at(a.next) + '.' : '';
+    const swatch = (list, cur, on, label) => h('div', { class: 'swatches', role: 'radiogroup', 'aria-label': label }, list.map((c, i) => { const b = h('button', { type: 'button', class: 'swatch', role: 'radio', 'aria-checked': String(cur === i), 'aria-label': label + ' ' + (i + 1) }); style(b, 'background', c); b.onclick = () => { on(i); saveDecor(); b.parentElement.querySelectorAll('.swatch').forEach(x => x.setAttribute('aria-checked', String(x === b))); if (villageApp) mount(); }; return b; }));
+    const editor = h('div', { class: 'room-tools', hidden: !roomEdit });
+    const drawEditor = () => editor.replaceChildren(
+      h('p', { class: 'small muted' }, 'Pick a piece of furniture, then tap the room to put it there. Remove takes things away. It saves by itself.'),
+      h('div', { class: 'palette', role: 'radiogroup', 'aria-label': 'Furniture' }, [['remove', 'Remove']].concat(ROOM_ITEMS).map(([k, l]) => h('button', { type: 'button', class: 'pal-item', role: 'radio', 'aria-checked': String(!!roomEdit && roomEdit.tool === k), onclick: () => { roomEdit.tool = k; drawEditor(); } }, k === 'remove' ? h('span', { class: 'pal-x', 'aria-hidden': 'true' }, '×') : itemIcon(k), h('span', {}, l)))),
+      h('div', { class: 'deco-row' }, h('span', { class: 'small' }, 'Floor'), swatch(FLOORS, room.floor, i => room.floor = i, 'Floor')),
+      h('div', { class: 'deco-row' }, h('span', { class: 'small' }, 'Walls inside'), swatch(PAPERS, room.paper, i => room.paper = i, 'Wallpaper')),
+      h('div', { class: 'deco-row' }, h('span', { class: 'small' }, 'Outside walls'), swatch(WALLS, hs.wall, i => hs.wall = i, 'Outside walls')),
+      h('div', { class: 'deco-row' }, h('span', { class: 'small' }, 'Roof'), swatch(ROOFS, hs.roof, i => hs.roof = i, 'Roof')));
+    const deco = h('button', { class: 'btn btn-sm', onclick: () => { roomEdit = roomEdit ? null : { tool: 'plant' }; editor.hidden = !roomEdit; deco.textContent = roomEdit ? 'Done decorating' : 'Decorate their house'; if (roomEdit) drawEditor(); } }, 'Decorate their house');
+    body.replaceChildren(cv, h('p', { class: 'small muted' }, m), h('div', { class: 'actions' }, deco), editor);
+  };
+  const lookTab = (a, body) => {
+    const look = lookOf(a);
+    const prev = h('div', { class: 'look-preview' });
+    const paint = () => prev.replaceChildren(personIcon(look, 6));
+    let saveL = 0; const save = () => { clearTimeout(saveL); saveL = setTimeout(async () => { const r = await act(() => api('admin/agents/' + a.id, { method: 'PATCH', body: { look } })); if (r) { a.look = JSON.stringify(r.look); mount(); } }, 400); };
+    const row = (label, k, list, colour) => h('div', { class: 'deco-row' }, h('span', { class: 'small' }, label), h('div', { class: colour ? 'swatches' : 'chips', role: 'radiogroup', 'aria-label': label }, list.map((v, i) => {
+      const b = h('button', { type: 'button', class: colour ? 'swatch' : 'chip' + (look[k] === i ? ' on' : ''), role: 'radio', 'aria-checked': String(look[k] === i), 'aria-label': colour ? label + ' ' + (i + 1) : null }, colour ? null : v);
+      if (colour) style(b, 'background', v);
+      b.onclick = () => { look[k] = i; b.parentElement.querySelectorAll('[role=radio]').forEach(x => { x.setAttribute('aria-checked', String(x === b)); if (!colour) x.classList.toggle('on', x === b); }); paint(); save(); };
+      return b; })));
+    paint();
+    body.replaceChildren(a.kind === 'system' ? h('p', { class: 'small muted' }, 'The Autopilot is a robot, so it keeps its metal look.') : h('div', { class: 'look-grid' }, prev, h('div', { class: 'look-rows' },
+      row('Skin', 'skin', LOOK.skin, true), row('Hair colour', 'hair', LOOK.hair, true), row('Hair', 'style', ['Short', 'Long', 'Bun', 'Spiky', 'Bald', 'Cap'], false),
+      row('Top', 'shirt', LOOK.shirt, true), row('Trousers', 'legs', LOOK.legs, true), row('Extra', 'acc', ['None', 'Glasses', 'Headphones', 'Hat', 'Crown', 'Bow'], false))));
+  };
+  const aboutTab = (a, body) => {
     const card = agentCard(a);
     if (a.health === 'hiring') card.append(h('p', { class: 'small muted' }, 'Waiting at the gate. The Boss sets them up tomorrow morning at 7:52 and tells you when they start.'));
     if (!a.seeded) { const box = confirmBox(a.health === 'hiring' ? 'Cancel this new agent before they start?' : 'Retire ' + a.name + '? The Boss switches their scheduled task off tomorrow morning.', a.health === 'hiring' ? 'Cancel them' : 'Retire', async () => { if (await act(() => api('admin/agents/' + a.id + '/retire', { method: 'POST' }), a.health === 'hiring' ? 'Cancelled' : 'Retiring')) { villageSel = ''; route(); } }); card.append(h('div', { class: 'actions' }, h('button', { class: 'btn btn-sm btn-ghost', onclick: () => box.hidden = false }, a.health === 'hiring' ? 'Cancel' : 'Retire'), box)); }
-    panel.append(card);
+    body.replaceChildren(card);
   };
-  // the hiring form
-  const looks = [0, 1, 2, 3, 4, 5]; let look = String(Math.floor(Math.random() * 6));
-  const swatches = h('div', { class: 'swatches', role: 'radiogroup', 'aria-label': 'Their look' }, looks.map(n => { const b = h('button', { type: 'button', class: 'swatch sw' + n, role: 'radio', 'aria-checked': String(String(n) === look), 'aria-label': 'Look ' + (n + 1) }); b.onclick = () => { look = String(n); swatches.querySelectorAll('.swatch').forEach(x => x.setAttribute('aria-checked', String(x === b))); }; return b; }));
+
+  // hiring
+  let look = String(Math.floor(Math.random() * 6));
+  const swatches = h('div', { class: 'swatches', role: 'radiogroup', 'aria-label': 'Their top' }, [0, 1, 2, 3, 4, 5].map(n => { const b = h('button', { type: 'button', class: 'swatch', role: 'radio', 'aria-checked': String(String(n) === look), 'aria-label': 'Colour ' + (n + 1) }); style(b, 'background', LOOK.shirt[n]); b.onclick = () => { look = String(n); swatches.querySelectorAll('.swatch').forEach(x => x.setAttribute('aria-checked', String(x === b))); }; return b; }));
   const f = form([
     { k: 'name', label: 'Their name', placeholder: 'e.g. Sky', hint: 'What you\'ll call them in the village.' },
     { k: 'business', label: 'Which business', placeholder: 'NEMORA', hint: 'Use a new name to start a new village for that business.', value: villageTown },
     { k: 'template', label: 'Job', type: 'select', options: d.templates.map(t => [t.id, t.label]) },
     { k: 'schedule', label: 'When they work', type: 'select', options: d.schedules.map(x => [x.id, x.label]) },
     { k: 'instructions', label: 'What they should do, in your words', type: 'textarea', rows: 5, placeholder: 'e.g. Post 3 times a week for Spitfire Comedy using photos from their shows. Never mention ticket prices.' }
-  ], {}, { title: 'Hire an agent', submit: 'Hire them', after: h('div', { class: 'field' }, h('span', { class: 'label' }, 'Their look'), swatches, h('p', { class: 'small muted' }, 'They wait at the village gate, and the Boss sets them up tomorrow at 7:52am with the standard rules: honest, logged, and checked every morning. Anything that needs a client\'s accounts waits until those are connected.')),
+  ], {}, { title: 'Hire an agent', submit: 'Hire them', after: h('div', { class: 'field' }, h('span', { class: 'label' }, 'Their top (dress them properly once they arrive)'), swatches, h('p', { class: 'small muted' }, 'They wait at the village gate, and the Boss sets them up tomorrow at 7:52am with the standard rules: honest, logged, and checked every morning. Anything that needs a client\'s accounts waits until those are connected.')),
     onSave: async v => { const r = await api('admin/agents', { method: 'POST', body: { ...v, look } }); toast(r.agent.name + ' is waiting at the gate'); villageTown = r.agent.business; villageSel = r.agent.id; route(); }, onCancel: () => { f.el.hidden = true; } });
   f.el.hidden = true;
-  const stage = h('div', { class: 'village-stage' });
-  const counts = { busy: 0, trouble: here.filter(a => ['missed', 'failed', 'attention'].includes(a.health)).length, asleep: here.filter(a => !a.enabled && a.health !== 'hiring').length, hiring: here.filter(a => a.health === 'hiring').length };
+  const trouble = here.filter(a => ['missed', 'failed', 'attention'].includes(a.health)).length;
   render(
-    pageHead('Village', villageTown === 'NEMORA' ? 'Your AI village' : villageTown + ' village', 'Everyone who works for you, living in one little town. Busy agents are inside with the lights on, paused ones are asleep, and anyone who needs you has a red "!".', [h('button', { class: 'btn btn-gold', onclick: () => { f.el.hidden = false; f.els.name.focus(); } }, 'Hire an agent')]),
-    towns.length > 1 ? chipsRow(towns.map(t => [t, t, d.agents.filter(a => (a.business || 'NEMORA') === t).length]), villageTown, t => { villageTown = t; villageSel = ''; showVillage(); }) : null,
-    f.el,
-    stage,
+    pageHead('Village', villageTown === 'NEMORA' ? 'Your AI village' : villageTown + ' village', 'Everyone who works for you, living in one little town. When an agent is working, their roof comes off so you can watch them at their desk. Paused agents are asleep, and anyone who needs you has a red "!".', [h('button', { class: 'btn btn-gold', onclick: () => { f.el.hidden = false; f.els.name.focus(); } }, 'Hire an agent'), editBtn]),
+    towns.length > 1 ? chipsRow(towns.map(t => [t, t, d.agents.filter(a => (a.business || 'NEMORA') === t).length]), villageTown, t => { villageTown = t; villageSel = ''; villageEdit = null; showVillage(); }) : null,
+    f.el, tools, stage,
     h('div', { class: 'village-legend small muted' },
-      h('span', {}, h('i', { class: 'lg busy' }), 'Working'), h('span', {}, h('i', { class: 'lg asleep' }), 'Paused (asleep)'), h('span', {}, h('i', { class: 'lg trouble' }), 'Needs you'), h('span', {}, h('i', { class: 'lg hiring' }), 'Waiting to be hired'),
-      counts.trouble ? h('strong', {}, plural(counts.trouble, 'agent') + (counts.trouble === 1 ? ' needs you' : ' need you')) : null),
+      h('span', {}, h('i', { class: 'lg busy' }), 'Working (roof off)'), h('span', {}, h('i', { class: 'lg asleep' }), 'Paused (asleep)'), h('span', {}, h('i', { class: 'lg trouble' }), 'Needs you'), h('span', {}, h('i', { class: 'lg hiring' }), 'Waiting to be hired'),
+      trouble ? h('strong', {}, plural(trouble, 'agent') + (trouble === 1 ? ' needs you' : ' need you')) : null),
     panel);
-  if (villageApp) villageApp.destroy();
-  villageApp = mountVillage(stage, here, { onSelect: showPanel, selected: villageSel, reduced: matchMedia('(prefers-reduced-motion: reduce)').matches });
+  mount();
   showPanel(here.find(a => a.id === villageSel) || null);
 }
 /* ================= site builder ================= */
