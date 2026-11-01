@@ -22,7 +22,9 @@
   // daily clean-up of visit statistics; every 15 minutes: check client sites are up
   "triggers": { "crons": ["17 3 * * *", "*/15 * * * *"] },
   "vars": {
-    "SITE_ORIGINS": "https://nemora.uk,https://www.nemora.uk"
+    "SITE_ORIGINS": "https://nemora.uk,https://www.nemora.uk",
+    // Facebook Login for Business configuration for the admin's Connect button (public, not a secret)
+    "META_LOGIN_CONFIG_ID": "1129926852870365"
   },
   "observability": { "enabled": true }
 }
