@@ -252,7 +252,7 @@ async function hmac(keyHex, msg) {
 
 /* ---------------- admin API ---------------- */
 async function adminApi(req, env, path, m, s) {
-  if (path === 'me' && m === 'GET') return json({ username: s.u, expires: s.exp, unread: (await listMessages(env)).filter(e => e.status === 'new').length });
+  if (path === 'me' && m === 'GET') return json({ username: s.u, role: s.role || 'owner', name: s.name || '', expires: s.exp, unread: (await listMessages(env)).filter(e => e.status === 'new').length });
   if (path === 'messages' && m === 'GET') return json({ messages: await listMessages(env) });
   if (path.startsWith('traffic') && m === 'GET') { const days = [7, 30, 90].includes(Number(new URL(req.url).searchParams.get('days'))) ? Number(new URL(req.url).searchParams.get('days')) : 30; return json(await traffic(env, days)); }
   if (path.startsWith('messages/')) {
@@ -276,6 +276,8 @@ async function adminApi(req, env, path, m, s) {
     return notAllowed();
   }
   if (path === 'activity' && m === 'GET') return json({ log: (await env.KV.get('log', 'json')) || [] });
+  if (path === 'account' && m === 'POST' && s.role === 'member') return memberAccount(req, env, s);
+  if (path === 'team' || path.startsWith('team/')) return teamApi(req, env, path, m, s);
   if (path === 'account' && m === 'POST') {
     const b = (await readJson(req)) || {};
     const creds = await credentials(env);
@@ -285,12 +287,21 @@ async function adminApi(req, env, path, m, s) {
     const newUser = String(b.username || '').trim(), newPass = String(b.password || '');
     if (!newUser && !newPass) return json({ error: 'Enter a new username, a new password, or both.' }, 422);
     if (newUser && !/^[A-Za-z0-9._@-]{3,60}$/.test(newUser)) return json({ error: 'Usernames can use letters, numbers, dots, dashes and @, from 3 to 60 characters.' }, 422);
+    if (newUser && newUser.toLowerCase() !== creds.user.toLowerCase() && (await readTeam(env)).some(t => t.user.toLowerCase() === newUser.toLowerCase())) return json({ error: 'A team member already uses that username.' }, 409);
     if (newPass) { const err = checkNewLogin(newUser || creds.user, newPass); if (err) return json({ error: err }, 422); }
     if (newPass) await env.KV.put('auth:hash', await hashPassword(newPass));
     if (newUser) await env.KV.put('auth:user', newUser);
     const cookie = await bumpGeneration(env, newUser || s.u);
     await log(env, req, newUser || s.u, newPass && newUser ? 'Changed username and password' : newPass ? 'Changed password' : 'Changed username');
     return json({ ok: true }, 200, { 'Set-Cookie': cookie });
+  }
+  if (path === 'logout-others' && m === 'POST' && s.role === 'member') {
+    // a team member only logs out their own other devices
+    const team = await readTeam(env), me = team.find(t => t.user === s.u);
+    if (!me) return json({ error: 'Your session has ended. Please log in again.' }, 401);
+    me.gen = (me.gen || 0) + 1; await writeTeam(env, team);
+    await log(env, req, s.u, 'Logged out all other devices');
+    return json({ ok: true }, 200, { 'Set-Cookie': await newSession(env, s.u, 'member', me) });
   }
   if (path === 'logout-others' && m === 'POST') {
     const cookie = await bumpGeneration(env, s.u);
@@ -310,10 +321,65 @@ async function adminApi(req, env, path, m, s) {
     const body = !isImage && ['POST', 'PUT', 'PATCH'].includes(m) ? ((await readJson(req, 2 * 1024 * 1024)) || {}) : {};
     return adminBuilds(req, env, id, sub, m, body, action => log(env, req, s.u, action), readRaw);
   }
-  const biz = await adminBiz(req, env, path, m, readJson, action => log(env, req, s.u, action), s.u, extra);
+  const biz = await adminBiz(req, env, path, m, readJson, action => log(env, req, s.u, action), s.u, extra, s.role || 'owner');
   if (biz) return biz;
   return json({ error: 'Not found.' }, 404);
 }
+/* ---------------- team: extra logins (e.g. a business partner) ----------------
+   The owner's login stays in auth:user / auth:hash. Extra logins live in auth:team as
+   [{ user, name, hash, gen, added, by }]. Members can use the whole admin except managing the team
+   and the owner's login; each member can change their own password. Removing a member ends their
+   sessions at once (getSession re-checks the team list on every request). */
+const MAX_TEAM = 5;
+async function readTeam(env) { const t = await env.KV.get('auth:team', 'json'); return Array.isArray(t) ? t : []; }
+async function writeTeam(env, team) { await env.KV.put('auth:team', JSON.stringify(team)); }
+async function teamApi(req, env, path, m, s) {
+  if (s.role === 'member') return json({ error: 'Only the owner can manage team logins.' }, 403);
+  const team = await readTeam(env);
+  if (path === 'team' && m === 'GET') return json({ team: team.map(t => ({ user: t.user, name: t.name || '', added: t.added, by: t.by })) });
+  const b = (await readJson(req)) || {};
+  const rl = await rateLimited(env, req);
+  if (rl.blocked) return json({ error: 'Too many attempts. Please wait 15 minutes and try again.' }, 429);
+  if (!(await verifyPassword(String(b.current || '').slice(0, 200), (await credentials(env)).hash))) { await fail(env, rl); await log(env, req, s.u, 'Failed attempt to change team logins'); return json({ error: 'Your current password is wrong.' }, 403); }
+  if (path === 'team' && m === 'POST') {
+    const user = String(b.username || '').trim(), pass = String(b.password || ''), name = String(b.name || '').replace(/[\u0000-\u001F\u007F<>]/g, '').trim().slice(0, 40);
+    if (!/^[A-Za-z0-9._@-]{3,60}$/.test(user)) return json({ error: 'Usernames can use letters, numbers, dots, dashes and @, from 3 to 60 characters.' }, 422);
+    const lc = user.toLowerCase();
+    if (lc === (await credentials(env)).user.toLowerCase() || team.some(t => t.user.toLowerCase() === lc)) return json({ error: 'That username is already taken.' }, 409);
+    if (team.length >= MAX_TEAM) return json({ error: `You can have up to ${MAX_TEAM} team logins.` }, 422);
+    const err = checkNewLogin(user, pass); if (err) return json({ error: err }, 422);
+    team.push({ user, name, hash: await hashPassword(pass), gen: 0, added: new Date().toISOString(), by: s.u });
+    await writeTeam(env, team);
+    await log(env, req, s.u, 'Added a team login for ' + user);
+    return json({ ok: true });
+  }
+  if (path.startsWith('team/') && m === 'DELETE') {
+    const lc = decodeURIComponent(path.slice(5)).toLowerCase();
+    const left = team.filter(t => t.user.toLowerCase() !== lc);
+    if (left.length === team.length) return json({ error: 'That team login could not be found.' }, 404);
+    await writeTeam(env, left);
+    await log(env, req, s.u, 'Removed the team login for ' + lc);
+    return json({ ok: true });
+  }
+  return notAllowed();
+}
+async function memberAccount(req, env, s) {
+  const b = (await readJson(req)) || {};
+  const rl = await rateLimited(env, req);
+  if (rl.blocked) return json({ error: 'Too many attempts. Please wait 15 minutes and try again.' }, 429);
+  const team = await readTeam(env), me = team.find(t => t.user === s.u);
+  if (!me) return json({ error: 'Your session has ended. Please log in again.' }, 401);
+  if (!(await verifyPassword(String(b.current || '').slice(0, 200), me.hash))) { await fail(env, rl); await log(env, req, s.u, 'Failed attempt to change password'); return json({ error: 'Your current password is wrong.' }, 403); }
+  if (String(b.username || '').trim() && String(b.username).trim() !== s.u) return json({ error: 'Ask the owner to change your username.' }, 422);
+  const pass = String(b.password || '');
+  if (!pass) return json({ error: 'Enter a new password.' }, 422);
+  const err = checkNewLogin(s.u, pass); if (err) return json({ error: err }, 422);
+  me.hash = await hashPassword(pass); me.gen = (me.gen || 0) + 1;
+  await writeTeam(env, team);
+  await log(env, req, s.u, 'Changed password');
+  return json({ ok: true }, 200, { 'Set-Cookie': await newSession(env, s.u, 'member', me) });
+}
+
 async function putMsg(env, rec) {
   const left = Math.max(60, Math.floor((Date.parse(rec.at) + KEEP_MESSAGES * 1000 - Date.now()) / 1000));
   await env.KV.put('msg:' + rec.id, JSON.stringify(rec), { expirationTtl: left, metadata: meta(rec) });
@@ -376,12 +442,18 @@ async function setup(req, env, url) {
 }
 
 const generation = async env => parseInt(await env.KV.get('auth:gen'), 10) || 0;
-async function newSession(env, user) {
+async function newSession(env, user, role = 'owner', member = null) {
   const id = randomHex(32), exp = Date.now() + SESSION_TTL * 1000, gen = await generation(env);
-  await env.KV.put('sess:' + await sha256hex(id), JSON.stringify({ u: user, exp, gen }), { expirationTtl: SESSION_TTL });
+  const sess = { u: user, exp, gen, role };
+  if (member) { sess.ug = member.gen || 0; sess.name = member.name || ''; }
+  await env.KV.put('sess:' + await sha256hex(id), JSON.stringify(sess), { expirationTtl: SESSION_TTL });
   return `${COOKIE}=${id}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${SESSION_TTL}`;
 }
-async function bumpGeneration(env, user) { await env.KV.put('auth:gen', String((await generation(env)) + 1)); return newSession(env, user); }
+async function bumpGeneration(env, user) {
+  await env.KV.put('auth:gen', String((await generation(env)) + 1));
+  const m = (await readTeam(env)).find(t => t.user === user);
+  return m ? newSession(env, user, 'member', m) : newSession(env, user);
+}
 
 async function login(req, env, url) {
   if (!sameOrigin(req, url)) return json({ error: 'Request blocked for security reasons.' }, 403);
@@ -391,16 +463,18 @@ async function login(req, env, url) {
   if (rl.blocked) return json({ error: 'Too many attempts. Please wait 15 minutes and try again.' }, 429);
   const body = (await readJson(req)) || {};
   const u = String(body.username || '').slice(0, 100), pw = String(body.password || '').slice(0, 200);
-  const okUser = await safeEqual(u.trim().toLowerCase(), creds.user.toLowerCase());
-  const okPass = await verifyPassword(pw, creds.hash);
+  const lc = u.trim().toLowerCase();
+  const member = lc && lc !== creds.user.toLowerCase() ? (await readTeam(env)).find(t => t.user.toLowerCase() === lc) : null;
+  const okUser = member ? true : await safeEqual(lc, creds.user.toLowerCase());
+  const okPass = await verifyPassword(pw, member ? member.hash : creds.hash);
   if (!(okUser && okPass)) {
     const left = await fail(env, rl);
     await log(env, req, '', 'Failed login');
     return left > 0 ? json({ error: `Wrong username or password. ${left} attempt${left === 1 ? '' : 's'} left.` }, 401) : json({ error: 'Too many attempts. Please wait 15 minutes and try again.' }, 429);
   }
   await env.KV.delete(rl.key);
-  await log(env, req, creds.user, 'Logged in');
-  return json({ ok: true }, 200, { 'Set-Cookie': await newSession(env, creds.user) });
+  await log(env, req, member ? member.user : creds.user, 'Logged in');
+  return json({ ok: true }, 200, { 'Set-Cookie': member ? await newSession(env, member.user, 'member', member) : await newSession(env, creds.user) });
 }
 async function logout(req, env, url) {
   if (!sameOrigin(req, url)) return json({ error: 'Request blocked for security reasons.' }, 403);
@@ -414,6 +488,7 @@ async function getSession(req, env) {
   const s = await env.KV.get('sess:' + await sha256hex(id), 'json');
   if (!s || s.exp < Date.now()) return null;
   if ((s.gen || 0) !== (await generation(env))) return null;
+  if (s.role === 'member') { const m = (await readTeam(env)).find(t => t.user === s.u); if (!m || (m.gen || 0) !== (s.ug || 0)) return null; }
   return s;
 }
 function readCookie(req) {

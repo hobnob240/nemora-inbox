@@ -133,9 +133,16 @@ async function team(env) {
   });
 }
 
-export async function adminAgents(env, id, sub, m, body, log) {
+// Charlie's personal agents (Lyn and anything he names Lyn): only the owner's login can see what they say
+const privateAgent = a => !!a && (a.id === 'lyn' || String(a.name || '').trim().toLowerCase() === 'lyn');
+export async function adminAgents(env, id, sub, m, body, log, role = 'owner') {
   await ensureAgents(env);
-  if (!id && m === 'GET') { const agents = await team(env); return reply({ agents, town: await townData(env, agents), ai: !!env.AI, now: now(), templates: TEMPLATES, schedules: SCHEDULES.map(([k, l]) => ({ id: k, label: l })) }); }
+  const member = role === 'member';
+  if (!id && m === 'GET') {
+    let agents = await team(env); const town = await townData(env, agents);
+    if (member) { agents = agents.map(a => privateAgent(a) ? { ...a, last_summary: '', personal: true } : a); town.lyn = { brief: null, due: [] }; }
+    return reply({ agents, town, role, ai: !!env.AI, now: now(), templates: TEMPLATES, schedules: SCHEDULES.map(([k, l]) => ({ id: k, label: l })) });
+  }
   if (!id && m === 'POST') {
     // Charlie designs a new agent in the village; the Boss sets it up as a scheduled task next morning
     const name = clean(body.name, 40), business = clean(body.business, 80) || 'NEMORA', tpl = TEMPLATES.find(t => t.id === body.template) || TEMPLATES[TEMPLATES.length - 1];
@@ -154,6 +161,7 @@ export async function adminAgents(env, id, sub, m, body, log) {
   }
   const a = await env.DB.prepare('SELECT * FROM agents WHERE id = ?').bind(String(id)).first();
   if (!a) return reply({ error: 'That agent could not be found.' }, 404);
+  if (member && privateAgent(a)) return reply({ error: a.name + ' is Charlie\'s personal assistant, so only Charlie\'s login can open them.' }, 403);
   if (m === 'GET' && !sub) {
     const runs = (await env.DB.prepare('SELECT * FROM agent_runs WHERE agent = ? ORDER BY finished DESC LIMIT 40').bind(a.id).all()).results || [];
     return reply({ agent: (await team(env)).find(x => x.id === a.id), runs });
@@ -210,9 +218,9 @@ export async function adminAgents(env, id, sub, m, body, log) {
 }
 
 // for the dashboard: agents that need a look
-export async function agentAlerts(env) {
+export async function agentAlerts(env, role = 'owner') {
   await ensureAgents(env);
-  const t = await team(env);
+  const t = (await team(env)).filter(a => role !== 'member' || !privateAgent(a));
   return t.filter(a => ['missed', 'failed', 'attention'].includes(a.health)).map(a => ({ id: a.id, name: a.name, health: a.health, summary: a.last_summary }))
     .concat(t.filter(a => a.unread_out).map(a => ({ id: a.id, name: a.name, health: 'reply', summary: 'Open the village to read it' })));
 }

@@ -108,14 +108,14 @@ const plusDays = (iso, n) => { const d = new Date(iso + 'T12:00:00Z'); d.setUTCD
 
 /* ---------- router ---------- */
 // returns a Response, or null if the path isn't a business route
-export async function adminBiz(req, env, path, m, readJson, log, user, extra) {
+export async function adminBiz(req, env, path, m, readJson, log, user, extra, role = 'owner') {
   const parts = path.split('/'), [res, id, sub] = parts;
   if (!['dashboard', 'leads', 'outbox', 'clients', 'projects', 'invoices', 'reports', 'settings', 'rulebook', 'sites', 'worklog', 'cf', 'social', 'agents', 'village'].includes(res)) return null;
   if (!env.DB) return reply({ error: 'The database is not connected. Add the D1 binding called DB in Cloudflare.' }, 503);
   await ensureBizSchema(env);
   try {
     const body = ['POST', 'PATCH', 'PUT'].includes(m) ? ((await readJson(req, 128 * 1024)) || {}) : {};
-    if (res === 'dashboard' && m === 'GET') return reply(await dashboard(env, extra));
+    if (res === 'dashboard' && m === 'GET') return reply(await dashboard(env, { ...extra, role }));
     if (res === 'leads') return await leads(env, id, sub, m, body, log, user);
     if (res === 'outbox' && id && m === 'DELETE') {
       const o = await first(env, 'SELECT business FROM outbox WHERE id = ?', id); if (!o) return reply({ error: 'That queued email has already gone or been removed.' }, 404);
@@ -125,7 +125,7 @@ export async function adminBiz(req, env, path, m, readJson, log, user, extra) {
     if (res === 'projects') return await projects(env, id, m, body, log);
     if (res === 'invoices') return await invoices(env, id, m, body, log);
     if (res === 'reports' && m === 'GET') return reply({ reports: (await all(env, 'SELECT * FROM reports ORDER BY date DESC, type LIMIT 60')).map(r => ({ ...r, needs_you: parseJSON(r.needs_you, []), highlights: parseJSON(r.highlights, []) })) });
-    if (res === 'agents') return await adminAgents(env, id, sub, m, body, log);
+    if (res === 'agents') return await adminAgents(env, id, sub, m, body, log, role);
     if (res === 'village') return await adminVillage(env, new URL(req.url), m, body, log);
     if (res === 'social') return await adminSocial(req, env, id, sub, m, body, log);
     if (res === 'sites') return await sites(env, id, sub, m, body, log);
@@ -149,7 +149,7 @@ export async function adminBiz(req, env, path, m, readJson, log, user, extra) {
 }
 
 /* ---------- dashboard ---------- */
-async function dashboard(env, { unread, visitors, latestMessages }) {
+async function dashboard(env, { unread, visitors, latestMessages, role }) {
   const t = today(), ms = monthStart(), ws = weekStart(), soon = plusDays(t, 7), ys = t.slice(0, 4) + '-01-01';
   const q = (sql, ...a) => env.DB.prepare(sql).bind(...a);
   const [leadCounts, sentWeek, sentToday, moneyMonth, moneyYear, outstanding, overdue, recurring, stages, dueSoon, report, hotLeads, queued, recentSent, siteRows, socialRows] = await env.DB.batch([
@@ -181,7 +181,7 @@ async function dashboard(env, { unread, visitors, latestMessages }) {
     overdue: overdue.results || [], stages: by(stages), dueSoon: dueSoon.results || [], hotLeads: hotLeads.results || [], recentSent: recentSent.results || [],
     report: rep.id ? { ...rep, needs_you: parseJSON(rep.needs_you, []), highlights: parseJSON(rep.highlights, []) } : null,
     social: Object.fromEntries((socialRows.results || []).map(x => [x.status, x.n])),
-    agents: await agentAlerts(env).catch(() => []),
+    agents: await agentAlerts(env, role).catch(() => []),
     sites: { total: sl.length, live: sl.filter(x => x.status === 'live').length, down: sl.filter(x => x.monitor && x.state === 'down').map(x => ({ id: x.id, name: x.name, since: x.down_since })), renewing: sl.filter(x => x.renews && x.renews <= soon30).map(x => ({ id: x.id, name: x.name, renews: x.renews })) }
   };
 }

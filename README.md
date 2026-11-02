@@ -31,6 +31,10 @@ Add a `RESEND_API_KEY` secret and an `ALERT_FROM` variable (a sender on a domain
 - Strict Content-Security-Policy, no inline scripts, frames denied, HSTS, noindex.
 - Messages delete themselves after 2 years (privacy notice), and can be deleted any time from the admin.
 
+## Team logins
+
+The owner (the login made at setup) can add up to 5 extra logins in Settings › Team logins, for example a business partner. Give them a temporary password in person; they choose their own in Settings. Team logins can use everything except Lyn (the owner's personal assistant), the team list and the owner's login. Removing a team login logs them out straight away. They are stored in KV under `auth:team` (salted PBKDF2 hashes only).
+
 ## Forgotten password
 
 In Cloudflare: Storage & databases, KV, the nemora-inbox namespace: delete `auth:user` and `auth:hash`. Add a SETUP_CODE secret again, then open `/admin` and set up a new login.

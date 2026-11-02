@@ -162,7 +162,7 @@ const NAV_MORE = [['visitors', 'Visitors'], ['settings', 'Settings']];
 const MENU = [['village', 'Village'], ['agents', 'Agents'], ['builds', 'Builder'], ['social', 'Social'], ['visitors', 'Visitors'], ['settings', 'Settings']];
 const SECTION = { village: 'village', builds: 'builds', agents: 'agents', agent: 'agents', social: 'social', post: 'social', sites: 'sites', site: 'sites', inbox: 'inbox', leads: 'leads', lead: 'leads', work: 'work', project: 'work', client: 'work', clients: 'work', money: 'money', invoice: 'money', visitors: 'visitors', settings: 'settings', activity: 'settings', home: 'home' };
 const TITLES = { village: 'Village', builds: 'Builder', agents: 'Agents', social: 'Social', sites: 'Sites', home: 'Home', inbox: 'Inbox', leads: 'Leads', work: 'Work', money: 'Money', visitors: 'Visitors', settings: 'Settings' };
-let me = { username: '', unread: 0 };
+let me = { username: '', role: 'owner', name: '', unread: 0 };
 function shell() {
   $('#side-nav').replaceChildren(...SIDE.map(([k, l]) => h('a', { href: '#' + k, 'data-k': k }, icon(k), l, k === 'inbox' ? h('span', { class: 'count', hidden: true }) : null)), h('div', { class: 'sep' }), ...NAV_MORE.map(([k, l]) => h('a', { href: '#' + k, 'data-k': k }, icon(k), l)));
   $('#tabbar').replaceChildren(...NAV.map(([k, l]) => h('a', { href: '#' + k, 'data-k': k }, icon(k), l, k === 'inbox' ? h('span', { class: 'dot', hidden: true }) : null)));
@@ -212,7 +212,7 @@ async function showHome() {
   const [d, st] = await Promise.all([api('admin/dashboard'), api('admin/settings').catch(() => ({ business: {} }))]);
   const hr = new Date().getHours();
   const hello = hr < 12 ? 'Good morning' : hr < 18 ? 'Good afternoon' : 'Good evening';
-  const name = (st.business && st.business.first_name) || '';
+  const name = me.role === 'member' ? (me.name || '') : ((st.business && st.business.first_name) || '');
   const L = d.leads || {}, sum = ks => ks.reduce((a, k) => a + (L[k] || 0), 0);
 
   const todo = [];
@@ -821,8 +821,8 @@ async function showVillage(pick) {
   const lynA = here.find(a => a.id === 'lyn'), lyn = town.lyn || {};
   const needs = [okCount ? okCount + (okCount === 1 ? ' thing needs' : ' things need') + ' your OK (tap the yellow sign)' : '', ...here.filter(a => a.stuck).map(a => a.name + ': ' + a.stuck.toLowerCase()), ...here.filter(a => ['missed', 'failed', 'attention'].includes(a.health)).map(a => a.name + ' needs a look')].filter(Boolean);
   const hr = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hour: 'numeric', hourCycle: 'h23' }).format(new Date()));
-  const lynCard = villageTown === 'NEMORA' && lynA ? h('section', { class: 'card lyn-card', 'aria-label': 'From Lyn' }, personIcon(lookOf(lynA), 3), h('div', {},
-    h('h2', {}, (hr < 12 ? 'Good morning' : hr < 18 ? 'Good afternoon' : 'Good evening') + ', Charlie'),
+  const lynCard = villageTown === 'NEMORA' && lynA && me.role !== 'member' ? h('section', { class: 'card lyn-card', 'aria-label': 'From Lyn' }, personIcon(lookOf(lynA), 3), h('div', {},
+    h('h2', {}, (hr < 12 ? 'Good morning' : hr < 18 ? 'Good afternoon' : 'Good evening') + ', ' + (me.role === 'member' ? (me.name || me.username) : 'Charlie')),
     lyn.brief ? h('p', { class: 'brief' }, lyn.brief.text) : h('p', { class: 'small muted' }, lynA.enabled ? 'Lyn writes your brief on her first run of the day, at 8:07am.' : 'Lyn is paused, so no brief today.'),
     lyn.due && lyn.due.length ? h('ul', {}, lyn.due.map(x => h('li', { class: x.late ? 'late' : '' }, x.text + (x.late ? ' (overdue)' : '')))) : null,
     needs.length ? h('ul', {}, needs.slice(0, 5).map(t => h('li', {}, t))) : h('p', { class: 'small muted' }, 'Nothing in the village needs you right now.'),
@@ -1195,10 +1195,10 @@ async function showSettings() {
   const msg = h('div', { class: 'msg', role: 'status', hidden: true });
   const acc = h('form', { class: 'card', novalidate: true, onsubmit: async e => {
     e.preventDefault(); msg.hidden = true;
-    try { await api('admin/account', { method: 'POST', body: { current: $('#a-cur').value, username: $('#a-user').value.trim(), password: $('#a-pass').value } }); acc.reset(); msg.className = 'msg ok'; msg.textContent = 'Saved. Any other devices have been logged out.'; msg.hidden = false; }
+    try { await api('admin/account', { method: 'POST', body: { current: $('#a-cur').value, username: $('#a-user') ? $('#a-user').value.trim() : '', password: $('#a-pass').value } }); acc.reset(); msg.className = 'msg ok'; msg.textContent = me.role === 'member' ? 'Password saved. Your other devices have been logged out.' : 'Saved. Everyone, including team logins, has been logged out on other devices.'; msg.hidden = false; }
     catch (x) { if (x.message !== 'logged out') { msg.className = 'msg err'; msg.textContent = x.message; msg.hidden = false; } }
-  } }, h('h2', {}, 'Login'), msg, h('div', { class: 'fields two' },
-    f('a-user', 'New username', 'text', 'username', 'Leave blank to keep it.'), f('a-pass', 'New password', 'password', 'new-password', 'At least 12 characters. Blank keeps it.')),
+  } }, h('h2', {}, 'Your login'), me.role === 'member' ? h('p', { class: 'small muted' }, 'Logged in as ' + me.username + '. Choose your own password the first time you log in.') : null, msg, h('div', { class: 'fields two' },
+    me.role === 'member' ? null : f('a-user', 'New username', 'text', 'username', 'Leave blank to keep it.'), f('a-pass', 'New password', 'password', 'new-password', me.role === 'member' ? 'At least 12 characters.' : 'At least 12 characters. Blank keeps it.')),
     f('a-cur', 'Current password', 'password', 'current-password', 'Needed to confirm it\'s you.'),
     h('div', { class: 'actions' }, h('button', { class: 'btn btn-gold', type: 'submit' }, 'Save login'),
       h('button', { class: 'btn', type: 'button', onclick: () => act(() => api('admin/logout-others', { method: 'POST' }), 'Other devices logged out') }, 'Log out other devices'),
@@ -1206,7 +1206,7 @@ async function showSettings() {
   const rules = rb.rulebook;
   render(
     pageHead('Settings', 'Settings'),
-    biz.el, acc,
+    biz.el, acc, me.role === 'member' ? null : await teamCard(),
     card('Outreach rulebook', rules ? [h('p', { class: 'small muted' }, `Version ${rules.version}, updated ${day(rules.updated)}. Your outreach assistant reads this before every run and never changes it itself. Ask Claude to change a rule.`),
       ...(rules.sections || []).map(sec => h('details', {}, h('summary', {}, sec.title), h('ul', { class: 'small' }, (sec.rules || []).map(r => h('li', {}, r)))))] : h('p', { class: 'muted small' }, 'Not loaded yet.')),
     card('Social media playbook', rb.social ? [h('p', { class: 'small muted' }, `Version ${rb.social.version}, updated ${day(rb.social.updated)}. Your social media agent reads this before every run. Ask Claude to change a rule.`),
@@ -1216,6 +1216,31 @@ async function showSettings() {
       h('li', {}, 'You stay logged in for 8 hours. Five wrong passwords lock logins for 15 minutes.'),
       h('li', {}, 'Website messages delete themselves after 2 years, and visitor stats after 13 months.'),
       h('li', {}, 'Invoices marked as sent or paid can\'t be deleted, because HMRC expects you to keep records for 6 years.'))));
+}
+// extra logins for the team (e.g. a business partner). Only the owner sees this card.
+async function teamCard() {
+  const { team } = await api('admin/team').catch(() => ({ team: [] }));
+  const msg = h('div', { class: 'msg', role: 'status', hidden: true });
+  const show = (ok, text) => { msg.className = 'msg ' + (ok ? 'ok' : 'err'); msg.textContent = text; msg.hidden = false; };
+  const f = (id, label, type, ac, hint) => h('div', { class: 'field' }, h('label', { for: id }, label), hint ? h('span', { class: 'hint' }, hint) : null, h('input', { id, type, autocomplete: ac, autocapitalize: 'none', spellcheck: 'false' }));
+  const rows = team.map(t => {
+    const box = confirmBox('Remove ' + t.user + '? They are logged out straight away. Type your own password below first.', 'Remove login', async () => {
+      try { await api('admin/team/' + encodeURIComponent(t.user), { method: 'DELETE', body: { current: $('#t-cur').value } }); toast('Login removed'); showSettings(); }
+      catch (x) { if (x.message !== 'logged out') { box.hidden = true; show(false, x.message); } }
+    });
+    return h('div', { class: 'row' }, h('span', { class: 'body' }, h('span', { class: 't' }, (t.name ? t.name + ' · ' : '') + t.user), h('span', { class: 's' }, 'Added ' + full(t.added))),
+      h('span', { class: 'end' }, h('button', { class: 'btn btn-ghost', type: 'button', onclick: () => box.hidden = false }, 'Remove')), box);
+  });
+  const add = h('form', { novalidate: true, onsubmit: async e => {
+    e.preventDefault(); msg.hidden = true;
+    try { await api('admin/team', { method: 'POST', body: { name: $('#t-name').value.trim(), username: $('#t-user').value.trim(), password: $('#t-pass').value, current: $('#t-cur').value } }); toast('Login added'); showSettings(); }
+    catch (x) { if (x.message !== 'logged out') show(false, x.message); }
+  } }, h('div', { class: 'fields two' },
+      f('t-name', 'Their first name', 'text', 'off', 'Used to greet them, e.g. Daniel.'), f('t-user', 'Their username', 'text', 'off', 'Letters, numbers, dots and dashes.'),
+      f('t-pass', 'Temporary password', 'password', 'new-password', 'At least 12 characters. Tell them in person; they change it in Settings.'), f('t-cur', 'Your password', 'password', 'current-password', 'Needed to add or remove a login.')),
+    h('div', { class: 'actions' }, h('button', { class: 'btn btn-gold', type: 'submit' }, 'Add login')));
+  return card('Team logins', [h('p', { class: 'small muted' }, 'Give your business partner their own login. They can use everything here except Lyn (your personal assistant), this team list and your login. Every login shows under Login activity.'), msg,
+    team.length ? h('div', { class: 'list' }, rows) : h('p', { class: 'small muted' }, 'No team logins yet.'), add]);
 }
 async function showActivity() {
   const { log } = await api('admin/activity');
