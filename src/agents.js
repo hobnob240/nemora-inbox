@@ -6,8 +6,22 @@
 export const AGENTS_SCHEMA = [
   `CREATE TABLE IF NOT EXISTS agents (id TEXT PRIMARY KEY, name TEXT NOT NULL, role TEXT NOT NULL DEFAULT '', job TEXT NOT NULL DEFAULT '', duties TEXT NOT NULL DEFAULT '[]', kind TEXT NOT NULL DEFAULT 'claude', cron TEXT NOT NULL DEFAULT '', tz TEXT NOT NULL DEFAULT 'Europe/London', schedule_text TEXT NOT NULL DEFAULT '', trigger_id TEXT NOT NULL DEFAULT '', reports_to TEXT NOT NULL DEFAULT 'boss', enabled INTEGER NOT NULL DEFAULT 1, sort INTEGER NOT NULL DEFAULT 0, last_run TEXT NOT NULL DEFAULT '', last_status TEXT NOT NULL DEFAULT '', last_summary TEXT NOT NULL DEFAULT '', updated TEXT NOT NULL DEFAULT '')`,
   `CREATE TABLE IF NOT EXISTS agent_runs (id INTEGER PRIMARY KEY AUTOINCREMENT, agent TEXT NOT NULL, started TEXT NOT NULL DEFAULT '', finished TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'ok', summary TEXT NOT NULL DEFAULT '')`,
-  `CREATE INDEX IF NOT EXISTS agent_runs_by ON agent_runs(agent, finished)`
+  `CREATE INDEX IF NOT EXISTS agent_runs_by ON agent_runs(agent, finished)`,
+  // Charlie's messages to agents (dir 'in') and their replies (dir 'out'); agents read theirs at the start of each run
+  `CREATE TABLE IF NOT EXISTS agent_msgs (id INTEGER PRIMARY KEY AUTOINCREMENT, agent TEXT NOT NULL, dir TEXT NOT NULL, kind TEXT NOT NULL DEFAULT 'chat', text TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'new', created TEXT NOT NULL DEFAULT '', read_at TEXT NOT NULL DEFAULT '')`,
+  `CREATE INDEX IF NOT EXISTS agent_msgs_by ON agent_msgs(agent, dir, status)`
 ];
+// starting personalities: Charlie can change them in the village
+const PERSONAS = {
+  boss: { traits: ['Calm', 'Straight-talking', 'Kind'], catchphrase: 'Everyone accounted for.', about: 'Steady and organised. Speaks plainly, never panics, quietly proud of the team.' },
+  lyn: { traits: ['Cheerful', 'Witty', 'Kind'], catchphrase: 'On it, Charlie.', about: "Charlie's right hand, a bit like Jarvis: warm, quick, a little cheeky, always one step ahead, never pushy." },
+  outreach: { traits: ['Bold', 'Chatty', 'Cheerful'], catchphrase: 'Found you some good ones today.', about: 'A friendly salesperson who loves a good lead, but never bends the rules.' },
+  replies: { traits: ['Kind', 'Calm'], catchphrase: 'Inbox looking tidy.', about: 'Patient and polite, the one who always writes back.' },
+  social: { traits: ['Witty', 'Cheerful', 'Bold'], catchphrase: 'This one will get saved, I can feel it.', about: 'Creative and upbeat, obsessed with good captions, allergic to fake content.' },
+  guides: { traits: ['Nerdy', 'Calm'], catchphrase: 'I checked three sources for that.', about: 'A careful researcher who loves a footnote.' },
+  care: { traits: ['Kind', 'Laid-back'], catchphrase: 'Your clients are in good hands.', about: 'Warm and reassuring, treats every client like a neighbour.' },
+  autopilot: { traits: ['Serious'], catchphrase: 'Beep. All sites up.', about: 'A tidy little robot that never sleeps.' }
+};
 
 // the team (seeded once; Charlie's switches and the agents' own reports are never overwritten)
 const TEAM = [
@@ -29,6 +43,9 @@ const TEAM = [
   { id: 'guides', name: 'Guides writer', role: 'Writes guides for nemora.uk', kind: 'claude', cron: '13 10 1,15 * *', schedule_text: 'The 1st and 15th of each month at 10:13am', trigger_id: 'trig_0142NdQ8BK8APcu6By9sXhKn', sort: 5,
     job: 'Researches and publishes one honest, useful guide for small business owners on nemora.uk/guides, twice a month, with every fact sourced.',
     duties: ['Picks a useful topic nobody has covered on the site', 'Researches it from official and reliable sources', 'Writes and publishes it on nemora.uk/guides', 'Never touches any other page'] },
+  { id: 'lyn', name: 'Lyn', role: 'Your personal assistant', kind: 'claude', cron: '7 8-22/2 * * *', schedule_text: 'Every 2 hours, 8am to 10pm', trigger_id: '', reports_to: '', sort: 1,
+    job: "Your Jarvis: answers your messages in the village, keeps your to-do list and reminders, checks your NEMORA inbox and your diary, looks things up, drafts emails for you to send, and passes jobs to the right agent.",
+    duties: ['Reads and answers your messages every 2 hours', 'Keeps your to-do list and reminders', 'Drafts emails and messages for you to send', 'Hands jobs to the right agent'] },
   { id: 'autopilot', name: 'Autopilot', role: 'Always on', kind: 'system', cron: '*/15 * * * *', schedule_text: 'Every 15 minutes', trigger_id: '', sort: 6,
     job: 'Built into the admin itself: publishes approved social posts on time and checks every website is up.',
     duties: ['Publishes approved posts at their time', 'Checks all your websites are online', 'Alerts you if a site goes down'] }
@@ -55,11 +72,12 @@ export async function ensureAgents(env) {
   if (ready) return;
   for (const s of AGENTS_SCHEMA) await env.DB.prepare(s).run();
   const cols = ((await env.DB.prepare('PRAGMA table_info(agents)').all()).results || []).map(c => c.name);
-  for (const [c, def] of [['business', "TEXT NOT NULL DEFAULT 'NEMORA'"], ['status', "TEXT NOT NULL DEFAULT 'active'"], ['brief', "TEXT NOT NULL DEFAULT ''"], ['look', "TEXT NOT NULL DEFAULT ''"], ['seeded', 'INTEGER NOT NULL DEFAULT 0']])
+  for (const [c, def] of [['business', "TEXT NOT NULL DEFAULT 'NEMORA'"], ['status', "TEXT NOT NULL DEFAULT 'active'"], ['brief', "TEXT NOT NULL DEFAULT ''"], ['look', "TEXT NOT NULL DEFAULT ''"], ['seeded', 'INTEGER NOT NULL DEFAULT 0'], ['personality', "TEXT NOT NULL DEFAULT ''"]])
     if (!cols.includes(c)) await env.DB.prepare(`ALTER TABLE agents ADD COLUMN ${c} ${def}`).run();
   const st = env.DB.prepare('INSERT OR IGNORE INTO agents (id, name, role, job, duties, kind, cron, schedule_text, trigger_id, reports_to, sort, updated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
   await env.DB.batch(TEAM.map(a => st.bind(a.id, a.name, a.role, a.job, JSON.stringify(a.duties), a.kind, a.cron, a.schedule_text, a.trigger_id, a.reports_to ?? 'boss', a.sort, now())));
-  await env.DB.prepare("UPDATE agents SET seeded = 1 WHERE id IN ('boss','outreach','replies','social','care','guides','autopilot')").run();
+  await env.DB.prepare("UPDATE agents SET seeded = 1 WHERE id IN ('boss','outreach','replies','social','care','guides','autopilot','lyn')").run();
+  for (const [id, pe] of Object.entries(PERSONAS)) await env.DB.prepare("UPDATE agents SET personality = ? WHERE id = ? AND personality = ''").bind(JSON.stringify(pe), id).run();
   ready = true;
 }
 
@@ -95,6 +113,7 @@ export function cronStep(cron, tz, from, dir = 1) {
 /* ---------- the view ---------- */
 async function team(env) {
   const rows = (await env.DB.prepare("SELECT * FROM agents WHERE status != 'retired' ORDER BY sort, name").all()).results || [];
+  const mail = (await env.DB.prepare("SELECT agent, dir, COUNT(*) n FROM agent_msgs WHERE status = 'new' GROUP BY agent, dir").all()).results || [];
   const since = new Date(Date.now() - 14 * 864e5).toISOString();
   const runs = (await env.DB.prepare('SELECT agent, status, COUNT(*) n FROM agent_runs WHERE finished >= ? GROUP BY agent, status').bind(since).all()).results || [];
   const t = new Date();
@@ -107,7 +126,9 @@ async function team(env) {
     const health = a.status === 'hiring' ? 'hiring' : a.status === 'retiring' ? 'retiring' : !a.enabled ? 'paused' : missed ? 'missed' : ['failed', 'attention'].includes(a.last_status) ? a.last_status : a.last_run ? 'ok' : 'waiting';
     const stats = Object.fromEntries(runs.filter(r => r.agent === a.id).map(r => [r.status, r.n]));
     let brief = {}; try { brief = JSON.parse(a.brief || '{}'); } catch (e) {}
-    return { ...a, brief, duties: JSON.parse(a.duties || '[]'), enabled: !!a.enabled, seeded: !!a.seeded, next: a.status === 'active' ? next : '', prev, health, stats };
+    let personality = {}; try { personality = JSON.parse(a.personality || '{}'); } catch (e) {}
+    const unread_out = (mail.find(x => x.agent === a.id && x.dir === 'out') || {}).n || 0, waiting_in = (mail.find(x => x.agent === a.id && x.dir === 'in') || {}).n || 0;
+    return { ...a, brief, personality, unread_out, waiting_in, duties: JSON.parse(a.duties || '[]'), enabled: !!a.enabled, seeded: !!a.seeded, next: a.status === 'active' ? next : '', prev, health, stats };
   });
 }
 
@@ -132,7 +153,7 @@ export async function adminAgents(env, id, sub, m, body, log) {
   }
   const a = await env.DB.prepare('SELECT * FROM agents WHERE id = ?').bind(String(id)).first();
   if (!a) return reply({ error: 'That agent could not be found.' }, 404);
-  if (m === 'GET') {
+  if (m === 'GET' && !sub) {
     const runs = (await env.DB.prepare('SELECT * FROM agent_runs WHERE agent = ? ORDER BY finished DESC LIMIT 40').bind(a.id).all()).results || [];
     return reply({ agent: (await team(env)).find(x => x.id === a.id), runs });
   }
@@ -143,9 +164,32 @@ export async function adminAgents(env, id, sub, m, body, log) {
     await log((st === 'retired' ? 'Cancelled the new agent ' : 'Retired the agent ') + a.name);
     return reply({ ok: true, status: st });
   }
+  if (sub === 'messages') {
+    if (m === 'GET') {
+      const msgs = (await env.DB.prepare('SELECT id, dir, kind, text, status, created FROM agent_msgs WHERE agent = ? ORDER BY id DESC LIMIT 60').bind(a.id).all()).results || [];
+      await env.DB.prepare("UPDATE agent_msgs SET status = 'read', read_at = ? WHERE agent = ? AND dir = 'out' AND status = 'new'").bind(now(), a.id).run();
+      return reply({ messages: msgs.reverse() });
+    }
+    if (m === 'POST') {
+      const text = clean(body.text, 2000), kind = body.kind === 'task' ? 'task' : 'chat';
+      if (!text) return reply({ error: 'Write a message first.' }, 422);
+      if (a.kind === 'system') return reply({ error: 'The Autopilot is a robot and can\'t read. Message Lyn or the Boss instead.' }, 409);
+      const n = ((await env.DB.prepare("SELECT COUNT(*) n FROM agent_msgs WHERE agent = ? AND dir = 'in' AND status = 'new'").bind(a.id).first()) || {}).n || 0;
+      if (n >= 20) return reply({ error: 'They already have 20 unread messages. Wait for them to catch up.' }, 429);
+      await env.DB.prepare("INSERT INTO agent_msgs (agent, dir, kind, text, status, created) VALUES (?, 'in', ?, ?, 'new', ?)").bind(a.id, kind, text, now()).run();
+      await log((kind === 'task' ? 'Gave a job to ' : 'Sent a message to ') + a.name);
+      return reply({ ok: true });
+    }
+  }
+  if (m === 'PATCH' && body.personality !== undefined) {
+    const TRAITS = ['Cheerful', 'Calm', 'Witty', 'Serious', 'Chatty', 'Straight-talking', 'Kind', 'Nerdy', 'Bold', 'Laid-back', 'Dramatic', 'Shy'];
+    const pe = body.personality || {}, out = { traits: (Array.isArray(pe.traits) ? pe.traits : []).filter(t => TRAITS.includes(t)).slice(0, 3), catchphrase: clean(pe.catchphrase, 80), about: clean(pe.about, 400) };
+    await env.DB.prepare('UPDATE agents SET personality = ? WHERE id = ?').bind(JSON.stringify(out), a.id).run();
+    return reply({ ok: true, personality: out });
+  }
   if (m === 'PATCH' && body.look !== undefined) {
     // Charlie dresses the agent: numbers only, each within its list
-    const L = { skin: 5, hair: 8, style: 6, shirt: 8, legs: 4, acc: 6 }, look = {};
+    const L = { skin: 5, hair: 8, style: 10, shirt: 8, legs: 4, acc: 12, face: 6, outfit: 7, shoes: 4, pet: 7 }, look = {};
     for (const [k, n] of Object.entries(L)) { const v = Math.floor(Number((body.look || {})[k])); look[k] = Number.isFinite(v) && v >= 0 && v < n ? v : 0; }
     await env.DB.prepare('UPDATE agents SET look = ? WHERE id = ?').bind(JSON.stringify(look), a.id).run();
     return reply({ ok: true, look });
@@ -164,7 +208,9 @@ export async function adminAgents(env, id, sub, m, body, log) {
 // for the dashboard: agents that need a look
 export async function agentAlerts(env) {
   await ensureAgents(env);
-  return (await team(env)).filter(a => ['missed', 'failed', 'attention'].includes(a.health)).map(a => ({ id: a.id, name: a.name, health: a.health, summary: a.last_summary }));
+  const t = await team(env);
+  return t.filter(a => ['missed', 'failed', 'attention'].includes(a.health)).map(a => ({ id: a.id, name: a.name, health: a.health, summary: a.last_summary }))
+    .concat(t.filter(a => a.unread_out).map(a => ({ id: a.id, name: a.name, health: 'reply', summary: 'Open the village to read it' })));
 }
 
 // is an agent switched on? (the publisher checks the Social media agent's switch)
@@ -187,8 +233,8 @@ export async function autopilotBeat(env, status, summary) {
 }
 
 /* ---------- the village's decorations (one set per business) ---------- */
-const TOWN_KEYS = ['tree', 'pine', 'bush', 'flowers', 'bench', 'lamp', 'pond', 'rock', 'stall', 'statue', 'mailbox', 'sign', 'flag', 'table', 'cat', 'car'];
-const ROOM_KEYS = ['plant', 'rug', 'shelf', 'lampf', 'sofa', 'picture', 'trophy', 'coffee', 'cat', 'board', 'clock', 'bin'];
+const TOWN_KEYS = ['tree', 'pine', 'bush', 'flowers', 'bench', 'lamp', 'pond', 'rock', 'stall', 'statue', 'mailbox', 'sign', 'flag', 'table', 'cat', 'car', 'well', 'campfire', 'tent', 'windmill', 'hedge', 'mushrooms', 'autumn', 'blossom', 'lights', 'banner', 'snowman', 'fountain'];
+const ROOM_KEYS = ['plant', 'rug', 'shelf', 'lampf', 'sofa', 'picture', 'trophy', 'coffee', 'cat', 'board', 'clock', 'bin', 'aquarium', 'guitar', 'cactus', 'poster', 'beanbag', 'fridge', 'fireplace', 'piano', 'tv', 'gamechair', 'dog', 'globe'];
 const int = (v, lo, hi) => { const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.max(lo, Math.min(hi, n)) : lo; };
 const items = (list, keys, w, h, max) => (Array.isArray(list) ? list : []).filter(i => i && keys.includes(i.k)).slice(0, max).map(i => ({ k: i.k, x: int(i.x, 0, w), y: int(i.y, 0, h) }));
 export async function adminVillage(env, url, m, body, log) {
@@ -199,6 +245,8 @@ export async function adminVillage(env, url, m, body, log) {
     const d = body.decor || {}, out = {};
     if (Array.isArray(d.items)) out.items = items(d.items, TOWN_KEYS, 480, 272, 250);
     out.houses = {}; for (const [id, hs] of Object.entries(d.houses || {}).slice(0, 60)) if (/^[a-z0-9_]{1,40}$/.test(id)) out.houses[id] = { wall: hs.wall == null ? null : int(hs.wall, 0, 9), roof: hs.roof == null ? null : int(hs.roof, 0, 9), door: /^#[0-9a-f]{6}$/i.test(hs.door || '') ? hs.door : undefined };
+    const st = d.settings || {};
+    out.settings = { name: clean(st.name, 40), ground: ['grass', 'autumn', 'snow', 'sand'].includes(st.ground) ? st.ground : 'grass', weather: ['none', 'rain', 'snow', 'leaves', 'petals'].includes(st.weather) ? st.weather : 'none', time: ['auto', 'day', 'sunset', 'night'].includes(st.time) ? st.time : 'auto' };
     out.rooms = {}; for (const [id, r] of Object.entries(d.rooms || {}).slice(0, 60)) if (/^[a-z0-9_]{1,40}$/.test(id)) out.rooms[id] = { floor: int(r.floor, 0, 5), paper: int(r.paper, 0, 5), items: items(r.items, ROOM_KEYS, 240, 144, 40) };
     await env.DB.prepare('INSERT INTO config (key, value, updated) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated = excluded.updated').bind(key, JSON.stringify(out), now()).run();
     return reply({ ok: true, decor: out });

@@ -1,6 +1,8 @@
 // NEMORA back office. Everything is drawn with DOM nodes and textContent: no innerHTML, so nothing a visitor or a lead
 // typed can ever run as code here. The page holds no passwords, keys or tokens; the login lives in an HttpOnly cookie.
-import { mountVillage, drawRoom, RW, RH, lookOf, personIcon, itemIcon, LOOK, WALLS, ROOFS, FLOORS, PAPERS, TOWN_ITEMS, ROOM_ITEMS, STARTER_DECOR } from './village.js?v=2';
+import { mountVillage, drawRoom, RW, RH, lookOf, personIcon, itemIcon, LOOK, WALLS, ROOFS, FLOORS, PAPERS, TOWN_ITEMS, ROOM_ITEMS, STARTER_DECOR, WEATHERS, TIMES } from './village.js?v=3';
+const cap = v => String(v).charAt(0).toUpperCase() + String(v).slice(1);
+const when2 = iso => new Date(iso).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 const $ = s => document.querySelector(s);
 const view = $('#view');
 const render = (...kids) => { view.replaceChildren(); add(view, kids); };
@@ -220,7 +222,7 @@ async function showHome() {
   for (const p of d.dueSoon) todo.push(['#project/' + p.id, 'clock', p.due < d.today ? 'bad' : '', `${p.title} ${p.due < d.today ? 'was due' : 'is due'} ${day(p.due)}`, (STAGE[p.stage] || [p.stage])[0]]);
   const so = d.social || {};
   if (so.needs_approval) todo.unshift(['#social', 'play', '', plural(so.needs_approval, 'video') + ' waiting for your OK', 'Social posts for Facebook and Instagram']);
-  for (const a of d.agents || []) todo.unshift(['#agent/' + a.id, 'agents', 'bad', `${a.name} agent ${a.health === 'missed' ? 'missed a run' : a.health === 'failed' ? 'failed' : 'needs a look'}`, a.summary || 'Open Agents to see why']);
+  for (const a of d.agents || []) todo.unshift(a.health === 'reply' ? ['#village/' + a.id, 'inbox', '', `${a.name} replied to you`, 'Open the village to read it'] : ['#agent/' + a.id, 'agents', 'bad', `${a.name} agent ${a.health === 'missed' ? 'missed a run' : a.health === 'failed' ? 'failed' : 'needs a look'}`, a.summary || 'Open Agents to see why']);
   if (so.failed) todo.unshift(['#social', 'alert', 'bad', plural(so.failed, 'social post') + ' failed to publish', 'Open Social to see why']);
   for (const x of (d.sites || {}).down || []) todo.unshift(['#site/' + x.id, 'alert', 'bad', `${x.name} is down`, x.since ? 'Since ' + when(x.since) : 'Not answering']);
   for (const x of (d.sites || {}).renewing || []) todo.push(['#site/' + x.id, 'clock', x.renews < d.today ? 'bad' : '', `${x.name}: domain renews ${day(x.renews)}`, 'Renew it so the site stays online']);
@@ -639,7 +641,7 @@ function resultsCard(p, id) {
     h('div', { class: 'actions' }, p.insights_at ? h('span', { class: 'small muted' }, 'Updated ' + at(p.insights_at)) : null, h('button', { class: 'btn btn-sm', onclick: async () => { if (await act(() => api('admin/social/' + id + '/insights', { method: 'POST' }), 'Results updated')) route(); } }, 'Refresh results'))]);
 }
 /* ================= village ================= */
-let villageTown = 'NEMORA', villageSel = '', villageApp = null, villageTab = 'house', villageEdit = null, roomEdit = null, roomRaf = 0;
+let villageTown = 'NEMORA', villageSel = '', villageApp = null, villageTab = 'talk', villageEdit = null, roomEdit = null, roomRaf = 0;
 async function showVillage(pick) {
   const d = await api('admin/agents');
   if (pick) villageSel = pick;
@@ -662,10 +664,20 @@ async function showVillage(pick) {
       h('p', { class: 'small muted' }, 'Pick something, then tap the grass to put it there. Choose Remove and tap a thing to take it away. Changes save by themselves.'),
       h('div', { class: 'palette', role: 'radiogroup', 'aria-label': 'Decorations' },
         [['remove', 'Remove']].concat(TOWN_ITEMS).map(([k, l]) => h('button', { type: 'button', class: 'pal-item', role: 'radio', 'aria-checked': String(!!villageEdit && villageEdit.tool === k), onclick: () => { villageEdit.tool = k; drawTools(); } }, k === 'remove' ? h('span', { class: 'pal-x', 'aria-hidden': 'true' }, '×') : itemIcon(k), h('span', {}, l)))),
+      settingsRow(),
       h('div', { class: 'actions' },
         h('button', { class: 'btn btn-sm', onclick: () => { decor.items = []; saveDecor(); } }, 'Clear the town'),
         h('button', { class: 'btn btn-sm', onclick: () => { decor.items = STARTER_DECOR.map(x => ({ ...x })); saveDecor(); } }, 'Start again'),
         h('button', { class: 'btn btn-sm btn-gold', onclick: () => stopEdit() }, 'Done')));
+  };
+  const settingsRow = () => {
+    const st = decor.settings = decor.settings || { name: '', ground: 'grass', weather: 'none', time: 'auto' };
+    const pick = (label, k, opts) => h('div', { class: 'deco-row' }, h('span', { class: 'small' }, label), h('div', { class: 'chips', role: 'radiogroup', 'aria-label': label }, opts.map(([v, l]) => h('button', { type: 'button', role: 'radio', class: 'chip' + ((st[k] || opts[0][0]) === v ? ' on' : ''), 'aria-checked': String((st[k] || opts[0][0]) === v), onclick: () => { st[k] = v; saveDecor(); drawTools(); mount(); } }, l))));
+    const name = h('input', { type: 'text', value: st.name || '', maxlength: 40, placeholder: 'e.g. Nemoraville', 'aria-label': 'Town name' });
+    name.addEventListener('change', () => { st.name = name.value.trim(); saveDecor(); mount(); });
+    return h('div', { class: 'town-settings' }, h('div', { class: 'deco-row' }, h('span', { class: 'small' }, 'Town name'), name),
+      pick('Ground', 'ground', [['grass', 'Grass'], ['autumn', 'Autumn'], ['snow', 'Snow'], ['sand', 'Sand']]),
+      pick('Weather', 'weather', WEATHERS), pick('Time of day', 'time', TIMES));
   };
   const stopEdit = () => { villageEdit = null; tools.hidden = true; editBtn.textContent = 'Decorate the town'; mount(); };
   const editBtn = h('button', { class: 'btn', onclick: () => {
@@ -680,11 +692,15 @@ async function showVillage(pick) {
     cancelAnimationFrame(roomRaf); roomEdit = null;
     panel.replaceChildren();
     if (!a) { panel.append(h('p', { class: 'small muted' }, 'Tap anyone in the village to look inside their house, dress them up or see what they do.')); return; }
-    const tabs = chipsRow([['house', 'Their house'], ['look', 'Their look'], ['about', 'What they do']], villageTab, k => { villageTab = k; showPanel(a); });
+    const opts = (a.kind === 'system' ? [] : [['talk', 'Talk']]).concat([['house', 'Their house'], ['look', 'Their look'], ['personality', 'Personality'], ['about', 'What they do']]);
+    if (!opts.some(([k]) => k === villageTab)) villageTab = opts[0][0];
+    const tabs = chipsRow(opts, villageTab, k => { villageTab = k; showPanel(a); });
     const body = h('div', { class: 'card village-card' });
     panel.append(h('div', { class: 'village-who' }, personIcon(lookOf(a), 3), h('div', {}, h('h2', {}, a.name), h('span', { class: 'small muted' }, a.role || ''))), tabs, body);
-    if (villageTab === 'house') houseTab(a, body);
+    if (villageTab === 'talk') talkTab(a, body);
+    else if (villageTab === 'house') houseTab(a, body);
     else if (villageTab === 'look') lookTab(a, body);
+    else if (villageTab === 'personality') personaTab(a, body);
     else aboutTab(a, body);
   };
   const houseTab = (a, body) => {
@@ -728,8 +744,37 @@ async function showVillage(pick) {
       return b; })));
     paint();
     body.replaceChildren(a.kind === 'system' ? h('p', { class: 'small muted' }, 'The Autopilot is a robot, so it keeps its metal look.') : h('div', { class: 'look-grid' }, prev, h('div', { class: 'look-rows' },
-      row('Skin', 'skin', LOOK.skin, true), row('Hair colour', 'hair', LOOK.hair, true), row('Hair', 'style', ['Short', 'Long', 'Bun', 'Spiky', 'Bald', 'Cap'], false),
-      row('Top', 'shirt', LOOK.shirt, true), row('Trousers', 'legs', LOOK.legs, true), row('Extra', 'acc', ['None', 'Glasses', 'Headphones', 'Hat', 'Crown', 'Bow'], false))));
+      row('Skin', 'skin', LOOK.skin, true), row('Hair colour', 'hair', LOOK.hair, true), row('Hair', 'style', LOOK.style.map(cap), false), row('Face', 'face', LOOK.face.map(cap), false),
+      row('Outfit', 'outfit', ['T-shirt', 'Hoodie', 'Suit', 'Dress', 'Overalls', 'Jumper', 'Lab coat'], false), row('Colour', 'shirt', LOOK.shirt, true), row('Trousers', 'legs', LOOK.legs, true), row('Shoes', 'shoes', LOOK.shoes, true),
+      row('Extra', 'acc', LOOK.acc.map(cap), false), row('Pet', 'pet', LOOK.pet.map(cap), false))));
+  };
+  const talkTab = async (a, body) => {
+    const thread = h('div', { class: 'thread', 'aria-live': 'polite' }, h('p', { class: 'small muted' }, 'Loading…'));
+    const box = h('textarea', { rows: 3, maxlength: 2000, placeholder: a.id === 'lyn' ? 'e.g. Remind me to invoice Spitfire on Friday, and find me 3 venues for a comedy night.' : 'Say hello, ask how it\'s going, or give them a job.', 'aria-label': 'Message to ' + a.name });
+    const job = h('input', { type: 'checkbox', id: 'is-job' });
+    const when = a.health === 'hiring' ? 'once the Boss sets them up' : !a.enabled ? 'when you switch them back on' : a.next ? 'on their next run, ' + at(a.next) : 'on their next run';
+    const load = async () => {
+      const { messages } = await api('admin/agents/' + a.id + '/messages');
+      thread.replaceChildren(...(messages.length ? messages.map(m => h('div', { class: 'msg-b ' + (m.dir === 'in' ? 'me' : 'them') }, h('span', { class: 'who' }, m.dir === 'in' ? 'You' + (m.kind === 'task' ? ' (a job)' : '') : a.name), h('p', {}, m.text), h('span', { class: 'when' }, when2(m.created) + (m.dir === 'in' && m.status === 'new' ? ', waiting to be read' : '')))) : [h('p', { class: 'small muted' }, 'No messages yet. Say hello.')]));
+      thread.scrollTop = thread.scrollHeight;
+      a.unread_out = 0;
+    };
+    const send = h('button', { class: 'btn btn-gold', onclick: async () => { if (!box.value.trim()) return; send.disabled = true; const r = await act(() => api('admin/agents/' + a.id + '/messages', { method: 'POST', body: { text: box.value, kind: job.checked ? 'task' : 'chat' } }), 'Sent. ' + a.name + ' will reply ' + when.replace('on their next run, ', 'at ')); send.disabled = false; if (r) { box.value = ''; job.checked = false; load(); } } }, 'Send');
+    body.replaceChildren(thread, box, h('div', { class: 'talk-row' }, h('label', { class: 'check' }, job, ' This is a job for ' + (a.id === 'lyn' ? 'her' : 'them')), send),
+      h('p', { class: 'small muted' }, a.name + ' reads this and replies ' + when + '. ' + (a.id === 'lyn' ? 'Lyn checks every 2 hours from 8am to 10pm, and passes jobs to the right agent.' : a.id === 'boss' ? 'The Boss reads messages every morning at 7:52.' : 'For anything quicker, message Lyn.')));
+    await load();
+  };
+  const personaTab = (a, body) => {
+    const pe = { traits: [], catchphrase: '', about: '', ...(a.personality || {}) };
+    const TRAITS = ['Cheerful', 'Calm', 'Witty', 'Serious', 'Chatty', 'Straight-talking', 'Kind', 'Nerdy', 'Bold', 'Laid-back', 'Dramatic', 'Shy'];
+    let t = 0; const save = () => { clearTimeout(t); t = setTimeout(async () => { const r = await act(() => api('admin/agents/' + a.id, { method: 'PATCH', body: { personality: pe } })); if (r) { a.personality = r.personality; mount(); } }, 500); };
+    const chips = h('div', { class: 'chips', role: 'group', 'aria-label': 'Up to 3 traits' }, TRAITS.map(tr => { const b = h('button', { type: 'button', class: 'chip' + (pe.traits.includes(tr) ? ' on' : ''), 'aria-pressed': String(pe.traits.includes(tr)) }, tr); b.onclick = () => { if (pe.traits.includes(tr)) pe.traits = pe.traits.filter(x => x !== tr); else if (pe.traits.length < 3) pe.traits.push(tr); else return toast('Up to 3 traits'); b.classList.toggle('on'); b.setAttribute('aria-pressed', String(pe.traits.includes(tr))); save(); }; return b; }));
+    const cp = h('input', { type: 'text', maxlength: 80, value: pe.catchphrase, 'aria-label': 'Catchphrase' }); cp.addEventListener('input', () => { pe.catchphrase = cp.value; save(); });
+    const ab = h('textarea', { rows: 3, maxlength: 400, 'aria-label': 'In your words' }, pe.about); ab.addEventListener('input', () => { pe.about = ab.value; save(); });
+    body.replaceChildren(h('div', { class: 'field' }, h('span', { class: 'label' }, 'Traits (up to 3)'), chips),
+      h('div', { class: 'field' }, h('span', { class: 'label' }, 'Catchphrase'), h('span', { class: 'hint' }, 'They say it around the village now and then.'), cp),
+      h('div', { class: 'field' }, h('span', { class: 'label' }, 'Who they are, in your words'), ab),
+      h('p', { class: 'small muted' }, 'Their personality shows when they talk to you. Their actual work (emails, posts, guides) stays professional and follows their rules.'));
   };
   const aboutTab = (a, body) => {
     const card = agentCard(a);
@@ -811,7 +856,7 @@ function agentCard(a, lead) {
   const [label, tone, dot] = HEALTH[a.health] || HEALTH.waiting;
   return h('article', { class: 'agent' + (lead ? ' lead' : '') + (a.enabled ? '' : ' off') },
     h('div', { class: 'agent-top' },
-      h('span', { class: 'agent-ico' }, icon(a.id === 'boss' ? 'boss' : a.id === 'social' ? 'social' : a.id === 'outreach' ? 'leads' : a.id === 'replies' ? 'inbox' : a.id === 'care' ? 'work' : a.id === 'guides' ? 'link' : a.kind === 'system' ? 'refresh' : 'agents')),
+      h('span', { class: 'agent-ico' }, icon(a.id === 'boss' ? 'boss' : a.id === 'social' ? 'social' : a.id === 'outreach' ? 'leads' : a.id === 'replies' ? 'inbox' : a.id === 'care' ? 'work' : a.id === 'guides' ? 'link' : a.id === 'lyn' ? 'star' : a.kind === 'system' ? 'refresh' : 'agents')),
       h('div', { class: 'agent-name' }, h('a', { href: '#agent/' + a.id }, h('h2', {}, a.name)), h('span', { class: 'small muted' }, a.role)),
       agentSwitch(a)),
     h('p', { class: 'agent-job' }, a.job),

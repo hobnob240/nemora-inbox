@@ -11,16 +11,23 @@ const PAL = {
 export const LOOK = {
   skin: ['#f1c7a3', '#e2ad86', '#c68a62', '#9a6243', '#6e432c'],
   hair: ['#2b2118', '#6b3f22', '#d8b25a', '#1a1a1a', '#a33b2b', '#dcdcdc', '#e06aa8', '#4a7be0'],
-  style: ['short', 'long', 'bun', 'spiky', 'bald', 'cap'],
+  style: ['short', 'long', 'bun', 'spiky', 'bald', 'cap', 'afro', 'ponytail', 'mohawk', 'curly'],
+  face: ['none', 'beard', 'moustache', 'stubble', 'freckles', 'blush'],
+  outfit: ['tshirt', 'hoodie', 'suit', 'dress', 'overalls', 'jumper', 'lab coat'],
+  shoes: ['#2a2a2a', '#f2f2f2', '#8a5a3a', '#d84f4f'],
+  pet: ['none', 'dog', 'cat', 'bird', 'fox', 'bunny', 'robot dog'],
   shirt: ['#3f6fd8', '#d84f4f', '#3fae6a', '#e0a33a', '#8a58d6', '#2fb3b3', '#2d2f38', '#f2f2f2'],
   legs: ['#2d3140', '#4a5a7a', '#6b4a2b', '#3a5a3a'],
-  acc: ['none', 'glasses', 'headphones', 'hat', 'crown', 'bow']
+  acc: ['none', 'glasses', 'headphones', 'hat', 'crown', 'bow', 'scarf', 'wizard hat', 'flower', 'earrings', 'cape', 'sunglasses']
 };
 export const WALLS = ['#e9dcc0', '#d9e4ef', '#efe0d0', '#f3d9e3', '#e6e0cf', '#e0efe6', '#c8ccd2', '#f6f0e1', '#e4d4f2', '#d8eec9'];
 export const ROOFS = ['#b0453a', '#3d6db5', '#7a5236', '#a8487a', '#5a6b3a', '#3a8a6a', '#5b6270', '#2f2f38', '#c07a2a', '#7a5aa8'];
 // town decorations and room furniture, each drawn in code
-export const TOWN_ITEMS = [['tree', 'Tree'], ['pine', 'Pine tree'], ['bush', 'Bush'], ['flowers', 'Flowers'], ['bench', 'Bench'], ['lamp', 'Street lamp'], ['pond', 'Pond'], ['rock', 'Rock'], ['stall', 'Market stall'], ['statue', 'Statue'], ['mailbox', 'Mailbox'], ['sign', 'Signpost'], ['flag', 'Flag'], ['table', 'Picnic table'], ['cat', 'Cat'], ['car', 'Car']];
-export const ROOM_ITEMS = [['plant', 'Plant'], ['rug', 'Rug'], ['shelf', 'Bookshelf'], ['lampf', 'Floor lamp'], ['sofa', 'Sofa'], ['picture', 'Picture'], ['trophy', 'Trophy'], ['coffee', 'Coffee machine'], ['cat', 'Cat'], ['board', 'Whiteboard'], ['clock', 'Clock'], ['bin', 'Bin']];
+export const TOWN_ITEMS = [['tree', 'Tree'], ['pine', 'Pine tree'], ['bush', 'Bush'], ['flowers', 'Flowers'], ['bench', 'Bench'], ['lamp', 'Street lamp'], ['pond', 'Pond'], ['rock', 'Rock'], ['stall', 'Market stall'], ['statue', 'Statue'], ['mailbox', 'Mailbox'], ['sign', 'Signpost'], ['flag', 'Flag'], ['table', 'Picnic table'], ['cat', 'Cat'], ['car', 'Car'], ['well', 'Well'], ['campfire', 'Campfire'], ['tent', 'Tent'], ['windmill', 'Windmill'], ['hedge', 'Hedge'], ['mushrooms', 'Mushrooms'], ['autumn', 'Autumn tree'], ['blossom', 'Blossom tree'], ['lights', 'Fairy lights'], ['banner', 'Banner'], ['snowman', 'Snowman'], ['fountain', 'Small fountain']];
+export const ROOM_ITEMS = [['plant', 'Plant'], ['rug', 'Rug'], ['shelf', 'Bookshelf'], ['lampf', 'Floor lamp'], ['sofa', 'Sofa'], ['picture', 'Picture'], ['trophy', 'Trophy'], ['coffee', 'Coffee machine'], ['cat', 'Cat'], ['board', 'Whiteboard'], ['clock', 'Clock'], ['bin', 'Bin'], ['aquarium', 'Fish tank'], ['guitar', 'Guitar'], ['cactus', 'Cactus'], ['poster', 'Poster'], ['beanbag', 'Bean bag'], ['fridge', 'Fridge'], ['fireplace', 'Fireplace'], ['piano', 'Piano'], ['tv', 'TV'], ['gamechair', 'Gaming chair'], ['dog', 'Dog bed'], ['globe', 'Globe']];
+export const GROUNDS = { grass: ['#5b8f3a', '#64983f', '#548536'], autumn: ['#8a8f3a', '#9a8a3f', '#7a7a36'], snow: ['#e8eef2', '#f4f7f9', '#dfe7ec'], sand: ['#d9c08a', '#e2cb96', '#cfb47c'], night: ['#2f5a3a', '#35643f', '#2a5236'] };
+export const WEATHERS = [['none', 'Clear'], ['rain', 'Rain'], ['snow', 'Snow'], ['leaves', 'Falling leaves'], ['petals', 'Blossom']];
+export const TIMES = [['auto', 'Real time'], ['day', 'Always day'], ['sunset', 'Sunset'], ['night', 'Always night']];
 export const FLOORS = ['#b98b5a', '#9a6e45', '#d2b48c', '#8f8f96', '#6d7fa0', '#c9a2a2'];
 export const PAPERS = ['#efe6d2', '#dfe9f2', '#f2e1dc', '#e3f0e0', '#ece2f3', '#2f3445'];
 
@@ -31,9 +38,10 @@ const SPOTS = {
   social: { x: 20, y: 2, w: 4, h: 3, wall: 3, roof: 3 },
   guides: { x: 3, y: 10, w: 4, h: 3, wall: 4, roof: 4 },
   care: { x: 22, y: 10, w: 4, h: 3, wall: 5, roof: 5 },
-  autopilot: { x: 25.5, y: 3, w: 2, h: 3, wall: 6, roof: 6, tower: true }
+  autopilot: { x: 25.5, y: 3, w: 2, h: 3, wall: 6, roof: 6, tower: true },
+  lyn: { x: 17.5, y: 10, w: 4, h: 3, wall: 8, roof: 9, flag: true }
 };
-const PLOTS = [{ x: 8.5, y: 10 }, { x: 17, y: 10.5 }, { x: 1.5, y: 6.5 }, { x: 26, y: 7.5 }, { x: 12, y: 12.5 }, { x: 19.5, y: 6.5 }];
+const PLOTS = [{ x: 8.5, y: 10 }, { x: 26, y: 12.5 }, { x: 1.5, y: 6.5 }, { x: 26, y: 7.5 }, { x: 12, y: 12.5 }, { x: 19.5, y: 6.5 }];
 const GATE = { x: 14.5 * T, y: 16.2 * T };
 const SQUARE = { x: 15 * T, y: 8.5 * T };
 
@@ -41,15 +49,16 @@ function rng(seed) { let s = 0; for (const c of String(seed)) s = (s * 31 + c.ch
 // an agent's look: saved JSON, or a number from the early version
 export function lookOf(a) {
   let l = null; try { l = typeof a.look === 'string' && a.look.startsWith('{') ? JSON.parse(a.look) : null; } catch (e) {}
-  if (l) return { skin: +l.skin || 0, hair: +l.hair || 0, style: +l.style || 0, shirt: +l.shirt || 0, legs: +l.legs || 0, acc: +l.acc || 0 };
+  if (l) return { skin: +l.skin || 0, hair: +l.hair || 0, style: +l.style || 0, shirt: +l.shirt || 0, legs: +l.legs || 0, acc: +l.acc || 0, face: +l.face || 0, outfit: +l.outfit || 0, shoes: +l.shoes || 0, pet: +l.pet || 0 };
+  if (a.id === 'lyn') return { skin: 1, hair: 4, style: 7, shirt: 4, legs: 0, acc: 1, face: 5, outfit: 5, shoes: 0, pet: 2 };
   const n = Number(a.look) || [...String(a.id)].reduce((s, c) => s + c.charCodeAt(0), 0);
-  return { skin: n % 5, hair: (n * 7 + 2) % 6, style: a.id === 'boss' ? 0 : n % 4, shirt: n % 6, legs: 0, acc: a.id === 'boss' ? 4 : 0 };
+  return { skin: n % 5, hair: (n * 7 + 2) % 6, style: a.id === 'boss' ? 0 : n % 4, shirt: n % 6, legs: 0, acc: a.id === 'boss' ? 4 : 0, face: a.id === 'boss' ? 1 : 0, outfit: a.id === 'boss' ? 2 : 0, shoes: 0, pet: 0 };
 }
 
 /* ---------- drawing ---------- */
-function drawGround(g) {
-  const r = rng('nemora');
-  for (let y = 0; y < H / T + 1; y++) for (let x = 0; x < W / T; x++) { g.fillStyle = PAL.grass[Math.floor(r() * 3)]; g.fillRect(x * T, y * T, T, T); if (r() < 0.25) { g.fillStyle = PAL.grass[1]; g.fillRect(x * T + Math.floor(r() * 14), y * T + Math.floor(r() * 14), 2, 1); } }
+function drawGround(g, ground) {
+  const r = rng('nemora'), G = GROUNDS[ground] || GROUNDS.grass;
+  for (let y = 0; y < H / T + 1; y++) for (let x = 0; x < W / T; x++) { g.fillStyle = G[Math.floor(r() * 3)]; g.fillRect(x * T, y * T, T, T); if (r() < 0.25) { g.fillStyle = G[1]; g.fillRect(x * T + Math.floor(r() * 14), y * T + Math.floor(r() * 14), 2, 1); } }
   const path = (x, y, w, h) => { g.fillStyle = PAL.pathEdge; g.fillRect(x - 1, y - 1, w + 2, h + 2); g.fillStyle = PAL.path; g.fillRect(x, y, w, h); };
   path(0, 7.5 * T, W, 2 * T); path(14 * T, 5 * T, 2 * T, H - 5 * T);
   for (const s of Object.values(SPOTS)) if (s.y < 7) path((s.x + s.w / 2 - 0.5) * T, (s.y + s.h) * T, T, 7.5 * T - (s.y + s.h) * T);
@@ -85,7 +94,32 @@ export function drawItem(g, k, x, y, t = 0) {
     case 'table': R('rgba(0,0,0,.2)', -8, 5, 17, 2); R('#8a6240', -8, -2, 16, 3); R('#7a5236', -9, 2, 2, 4); R('#7a5236', 7, 2, 2, 4); R('#e0564e', -3, -3, 4, 1); break;
     case 'cat': R('#3a3a3a', -3, -1, 6, 4); R('#3a3a3a', 2, -4, 3, 3); R('#3a3a3a', 2, -5, 1, 1); R('#3a3a3a', 4, -5, 1, 1); R('#f2d36b', 3, -3, 1, 1); R('#3a3a3a', -5, -3 + Math.round(Math.sin(t / 250)), 1, 3); break;
     case 'car': R('rgba(0,0,0,.25)', -10, 4, 21, 3); R('#d84f4f', -10, -3, 20, 7); R('#b03a3a', -6, -7, 11, 4); R('#9fd3f0', -4, -6, 3, 2); R('#9fd3f0', 1, -6, 3, 2); C('#222', -6, 4, 2); C('#222', 6, 4, 2); break;
+    case 'well': R('rgba(0,0,0,.2)', -7, 6, 15, 2); C('#7d8288', 0, 2, 7); C('#2d4a6a', 0, 2, 4); R('#6b4a2b', -7, -10, 1, 12); R('#6b4a2b', 6, -10, 1, 12); R('#b0453a', -9, -12, 19, 3); break;
+    case 'campfire': R('#6b4a2b', -6, 3, 12, 2); R('#6b4a2b', -4, 1, 8, 2); { const f = Math.floor(t / 120) % 3; R('#e0563a', -3, -2 - f, 6, 4 + f); R('#f2a13a', -2, -1 - f, 4, 3); R('#ffe08a', -1, 0, 2, 2); } break;
+    case 'tent': R('rgba(0,0,0,.2)', -10, 6, 21, 2); for (let i = 0; i < 12; i++) R(i % 4 < 2 ? '#3fae6a' : '#2f8a52', -1 - Math.floor(i * 0.8), -6 + i, 3 + Math.floor(i * 1.6), 1); R('#1d3a2a', -1, 2, 3, 4); break;
+    case 'windmill': R('#e9dcc0', -4, -6, 9, 14); R('#b0453a', -5, -9, 11, 3); { const a = t / 600; g.strokeStyle = '#6b4a2b'; g.lineWidth = 2; for (let i = 0; i < 4; i++) { g.beginPath(); g.moveTo(x, y - 6); g.lineTo(x + Math.cos(a + i * Math.PI / 2) * 10, y - 6 + Math.sin(a + i * Math.PI / 2) * 10); g.stroke(); } } R('#5a3b22', -1, 3, 3, 5); break;
+    case 'hedge': R('#2f6b2a', -12, -4, 24, 8); R('#3f8a36', -12, -4, 24, 2); break;
+    case 'mushrooms': R('#f2f2f2', -3, 0, 1, 3); R('#d84f4f', -5, -2, 5, 2); R('#f2f2f2', 2, 1, 1, 2); R('#d84f4f', 1, 0, 3, 1); break;
+    case 'autumn': R('rgba(0,0,0,.2)', -6, 7, 13, 3); R(PAL.trunk, -1, 2, 3, 7); C('#d0702a', 0, -2, 7); C('#e8a03a', -2, -4, 4); break;
+    case 'blossom': R('rgba(0,0,0,.2)', -6, 7, 13, 3); R(PAL.trunk, -1, 2, 3, 7); C('#f0a0c0', 0, -2, 7); C('#fbd0e0', -2, -4, 4); break;
+    case 'lights': R('#3b3f4a', -14, -6, 1, 14); R('#3b3f4a', 14, -6, 1, 14); for (let i = 0; i < 9; i++) R(['#f2d36b', '#f08aa0', '#62b6ea', '#3fae6a'][(i + Math.floor(t / 400)) % 4], -12 + i * 3, -5 + Math.round(Math.sin(i / 8 * Math.PI) * 3), 2, 2); break;
+    case 'banner': R('#6b4a2b', -10, -12, 1, 20); R('#6b4a2b', 10, -12, 1, 20); R('#d4b06a', -9, -11, 19, 6); R('#17130a', -6, -9, 13, 1); break;
+    case 'snowman': C('#f4f7f9', 0, 2, 5); C('#f4f7f9', 0, -5, 3); R('#1a1a1a', -1, -6, 1, 1); R('#1a1a1a', 1, -6, 1, 1); R('#e07a2a', 0, -5, 2, 1); R('#d84f4f', -3, -3, 6, 1); break;
+    case 'fountain': C('#7d8288', 0, 2, 8); C(PAL.water[Math.floor(t / 400) % 2], 0, 2, 6); R('#9aa0a6', -1, -5, 2, 7); R('#ffffff', 0, -7 - (Math.floor(t / 200) % 2), 1, 2); break;
     // room furniture
+    case 'aquarium': R('#3b3f4a', -11, -2, 22, 2); R('#62b6ea', -10, -12, 20, 10); R('#3fae6a', -8, -6, 1, 4); R('#3fae6a', 6, -7, 1, 5); R('#f2a13a', -4 + Math.round(Math.sin(t / 700) * 4), -9, 3, 2); R('#f08aa0', 2 - Math.round(Math.sin(t / 900) * 3), -5, 2, 1); break;
+    case 'guitar': R('#b07a4a', -3, -2, 6, 7); R('#6b4a2b', -1, -1, 2, 2); R('#6b4a2b', 0, -12, 1, 10); R('#3b3f4a', -1, -13, 3, 2); break;
+    case 'cactus': R('#8a5a3a', -3, 2, 6, 5); R('#3fae6a', -1, -8, 3, 10); R('#3fae6a', -4, -5, 2, 4); R('#3fae6a', 3, -6, 2, 3); break;
+    case 'poster': R('#2d2f38', -7, -10, 14, 18); R('#d84f4f', -5, -8, 10, 6); R('#f2d36b', -5, 0, 10, 2); R('#f2f2f2', -5, 4, 7, 1); break;
+    case 'beanbag': g.fillStyle = '#e0a33a'; g.beginPath(); g.ellipse(x, y, 10, 6, 0, 0, Math.PI * 2); g.fill(); g.fillStyle = '#f0b84a'; g.beginPath(); g.ellipse(x - 2, y - 2, 5, 3, 0, 0, Math.PI * 2); g.fill(); break;
+    case 'fridge': R('#dfe3e8', -6, -18, 12, 24); R('#c8ccd2', -6, -9, 12, 1); R('#9aa0a6', 3, -15, 1, 4); R('#9aa0a6', 3, -6, 1, 5); break;
+    case 'fireplace': R('#8a5a3a', -14, -14, 28, 20); R('#2d2f38', -8, -6, 16, 12); { const f = Math.floor(t / 120) % 3; R('#e0563a', -5, 1 - f, 10, 5 + f); R('#f2a13a', -3, 2 - f, 6, 4); } R('#6b4a2b', -16, -16, 32, 3); break;
+    case 'piano': R('#1a1a1a', -14, -10, 28, 14); R('#f2f2f2', -12, -2, 24, 4); for (let i = 0; i < 8; i++) R('#1a1a1a', -11 + i * 3, -2, 1, 2); R('#1a1a1a', -13, 4, 2, 4); R('#1a1a1a', 11, 4, 2, 4); break;
+    case 'tv': R('#2d2f38', -12, -14, 24, 15); R(['#62b6ea', '#3fae6a', '#e0a33a'][Math.floor(t / 1500) % 3], -10, -12, 20, 11); R('#2d2f38', -1, 1, 2, 3); R('#2d2f38', -6, 4, 12, 2); break;
+    case 'gamechair': R('#d84f4f', -5, -14, 10, 12); R('#1a1a1a', -3, -12, 6, 8); R('#d84f4f', -6, -2, 12, 4); R('#3b3f4a', -1, 2, 2, 4); R('#3b3f4a', -5, 6, 10, 1); break;
+    case 'dog': g.fillStyle = '#8a5a3a'; g.beginPath(); g.ellipse(x, y, 10, 5, 0, 0, Math.PI * 2); g.fill(); R('#b07a4a', -5, -3, 9, 4); R('#b07a4a', 3, -5, 3, 3); R('#1a1a1a', 4, -4, 1, 1); break;
+    case 'globe': R('#6b4a2b', -4, 4, 8, 2); R('#6b4a2b', 0, 0, 1, 4); C('#3d8fc9', 0, -4, 5); R('#3fae6a', -2, -6, 3, 2); R('#3fae6a', 1, -3, 2, 2); break;
+    // room furniture (originals)
     case 'plant': R('#8a5a3a', -3, 2, 6, 6); C('#3fae6a', 0, -2, 5); C('#4cc07a', -2, -4, 3); break;
     case 'rug': g.fillStyle = '#b0453a'; g.fillRect(x - 18, y - 8, 36, 16); g.fillStyle = '#d4b06a'; g.fillRect(x - 15, y - 5, 30, 10); g.fillStyle = '#b0453a'; g.fillRect(x - 11, y - 2, 22, 4); break;
     case 'shelf': R('#6b4a2b', -9, -16, 18, 24); for (let i = 0; i < 3; i++) { R('#4a3220', -8, -14 + i * 8, 16, 1); ['#d84f4f', '#3f6fd8', '#3fae6a', '#e0a33a', '#8a58d6'].forEach((c, j) => R(c, -7 + j * 3, -20 + i * 8 + 8, 2, 5)); } break;
@@ -140,11 +174,18 @@ export function drawPerson(g, x, y, look, o = {}) {
     R('#6f777f', 0, -9, 1, 3); R(t % 1000 < 500 ? '#f05a5a' : '#ffd86b', 0, -10, 1, 1); R('#7b848e', -3, 2, 7, 4); R(PAL.dark, -3 + step, 6, 2, 2); R(PAL.dark, 2 - step, 6, 2, 2); return;
   }
   const skin = LOOK.skin[look.skin] || LOOK.skin[0], hair = LOOK.hair[look.hair] || LOOK.hair[0], shirt = LOOK.shirt[look.shirt] || LOOK.shirt[0], legs = LOOK.legs[look.legs] || LOOK.legs[0];
-  const style = LOOK.style[look.style] || 'short', acc = LOOK.acc[look.acc] || 'none';
-  if (!o.seated) { R('rgba(0,0,0,0.25)', -4, 7, 9, 2); R(legs, -2, 3, 2, 4 - step); R(legs, 1, 3, 2, 3 + step); }
+  const style = LOOK.style[look.style] || 'short', acc = LOOK.acc[look.acc] || 'none', face = LOOK.face[look.face] || 'none', outfit = LOOK.outfit[look.outfit] || 'tshirt', shoes = LOOK.shoes[look.shoes] || LOOK.shoes[0];
+  if (acc === 'cape' && !o.lying) R('#b0453a', -4, -2, 9, 9);
+  if (!o.seated) { R('rgba(0,0,0,0.25)', -4, 7, 9, 2); if (outfit === 'dress') { R(shirt, -3, 3, 7, 3); R(skin, -2, 6, 1, 1); R(skin, 2, 6, 1, 1); } else { R(outfit === 'overalls' ? '#3d6db5' : legs, -2, 3, 2, 4 - step); R(outfit === 'overalls' ? '#3d6db5' : legs, 1, 3, 2, 3 + step); } R(shoes, -2, 7 - step, 2, 1); R(shoes, 1, 6 + step, 2, 1); }
   if (o.lying) { R(skin, -7, -2, 5, 4); R(hair, -8, -2, 2, 4); return; }
   R(shirt, -3, -2, 7, 6); R('rgba(0,0,0,0.15)', -3, 3, 7, 1);
+  if (outfit === 'hoodie') { R(shirt, -3, -3, 7, 1); R('rgba(0,0,0,0.2)', -1, 1, 3, 2); }
+  if (outfit === 'suit') { R('#2d2f38', -3, -2, 2, 6); R('#2d2f38', 2, -2, 2, 6); R('#f2f2f2', -1, -2, 3, 2); R('#b0453a', 0, -1, 1, 3); }
+  if (outfit === 'overalls') { R('#3d6db5', -2, 0, 5, 4); R('#3d6db5', -2, -2, 1, 2); R('#3d6db5', 2, -2, 1, 2); }
+  if (outfit === 'jumper') { R('rgba(255,255,255,0.25)', -3, 0, 7, 1); R('rgba(255,255,255,0.25)', -3, 2, 7, 1); }
+  if (outfit === 'lab coat') { R('#f2f2f2', -3, -2, 2, 7); R('#f2f2f2', 2, -2, 2, 7); }
   if (acc === 'crown') R('#d4b06a', 0, -2, 1, 4);
+  if (acc === 'scarf') R('#d84f4f', -2, -3, 5, 2);
   const typing = o.seated ? (Math.floor(t / 160) % 2) : 0;
   if (o.seated) { R(skin, -4, 1 - typing, 2, 2); R(skin, 3, typing, 2, 2); } else { R(skin, -4, -1 + step, 1, 3); R(skin, 4, -step, 1, 3); }
   R(skin, -2, -7, 5, 5);
@@ -153,6 +194,10 @@ export function drawPerson(g, x, y, look, o = {}) {
   else if (style === 'spiky') { R(hair, -2, -8, 5, 2); R(hair, -2, -9, 1, 1); R(hair, 0, -10, 1, 2); R(hair, 2, -9, 1, 1); }
   else if (style === 'cap') { R(hair, -2, -9, 5, 3); R(hair, 2, -7, 3, 1); }
   else if (style === 'short') { R(hair, -2, -8, 5, 2); R(hair, -3, -7, 1, 2); }
+  else if (style === 'afro') { R(hair, -4, -10, 9, 4); R(hair, -4, -7, 1, 3); R(hair, 4, -7, 1, 3); }
+  else if (style === 'ponytail') { R(hair, -2, -8, 5, 2); R(hair, -4, -7, 2, 4); }
+  else if (style === 'mohawk') { R(hair, 0, -10, 1, 3); }
+  else if (style === 'curly') { R(hair, -3, -9, 7, 3); R(hair, -3, -6, 1, 2); R(hair, 3, -6, 1, 2); R('rgba(255,255,255,0.15)', -2, -9, 1, 1); R('rgba(255,255,255,0.15)', 1, -8, 1, 1); }
   const dir = o.dir || 1;
   R(PAL.dark, dir >= 0 ? 1 : -1, -5, 1, 1); if (o.seated) R(PAL.dark, -1, -5, 1, 1);
   if (acc === 'glasses') { R('#1a1a1a', -2, -5, 2, 1); R('#1a1a1a', 1, -5, 2, 1); }
@@ -160,6 +205,27 @@ export function drawPerson(g, x, y, look, o = {}) {
   if (acc === 'hat') { R('#3b3f4a', -4, -8, 9, 1); R('#3b3f4a', -2, -11, 5, 3); }
   if (acc === 'crown') { R('#e8c35a', -2, -10, 5, 2); R('#e8c35a', -2, -11, 1, 1); R('#e8c35a', 0, -11, 1, 1); R('#e8c35a', 2, -11, 1, 1); }
   if (acc === 'bow') { R('#e06aa8', 2, -9, 3, 2); }
+  if (acc === 'wizard hat') { R('#5a3fa0', -4, -8, 9, 1); R('#5a3fa0', -2, -10, 5, 2); R('#5a3fa0', -1, -12, 3, 2); R('#5a3fa0', 0, -14, 1, 2); R('#f2d36b', 0, -10, 1, 1); }
+  if (acc === 'flower') { R('#f08aa0', 2, -9, 2, 2); R('#f2d36b', 2, -9, 1, 1); }
+  if (acc === 'earrings') { R('#e8c35a', -3, -4, 1, 1); R('#e8c35a', 3, -4, 1, 1); }
+  if (acc === 'sunglasses') R('#1a1a1a', -2, -5, 5, 1);
+  if (face === 'beard') { R(hair, -2, -4, 5, 2); R(hair, -2, -5, 1, 1); R(hair, 2, -5, 1, 1); }
+  if (face === 'moustache') R(hair, -1, -4, 3, 1);
+  if (face === 'stubble') { R('rgba(0,0,0,0.18)', -2, -4, 5, 2); }
+  if (face === 'freckles') { R('#b06a4a', -1, -4, 1, 1); R('#b06a4a', 2, -4, 1, 1); }
+  if (face === 'blush') { R('#f08aa0', -2, -4, 1, 1); R('#f08aa0', 2, -4, 1, 1); }
+}
+
+export function drawPet(g, x, y, kind, t = 0, moving) {
+  x = Math.round(x); y = Math.round(y); const R = (c, a, b, w, h) => { g.fillStyle = c; g.fillRect(x + a, y + b, w, h); };
+  const hop = moving ? Math.floor(t / 120) % 2 : 0;
+  R('rgba(0,0,0,0.2)', -3, 3, 7, 1);
+  if (kind === 'dog') { R('#b07a4a', -3, -1 - hop, 6, 3); R('#b07a4a', 2, -3 - hop, 3, 3); R('#6b4a2b', 4, -3 - hop, 1, 2); R('#1a1a1a', 3, -2 - hop, 1, 1); R('#b07a4a', -3, -3 - hop + Math.round(Math.sin(t / 120)), 1, 2); R('#6b4a2b', -2, 2, 1, 1); R('#6b4a2b', 1, 2, 1, 1); }
+  if (kind === 'cat') { R('#3a3a3a', -3, -1 - hop, 5, 3); R('#3a3a3a', 1, -3 - hop, 3, 2); R('#3a3a3a', 1, -4 - hop, 1, 1); R('#3a3a3a', 3, -4 - hop, 1, 1); R('#f2d36b', 2, -3 - hop, 1, 1); R('#3a3a3a', -4, -3 + Math.round(Math.sin(t / 250)), 1, 3); }
+  if (kind === 'bird') { const f = Math.floor(t / 100) % 2; R('#3f6fd8', -1, -9 - f, 3, 2); R('#3f6fd8', f ? -3 : -2, -10, 2, 1); R('#3f6fd8', f ? 2 : 1, -10, 2, 1); R('#e0a33a', 2, -9 - f, 1, 1); }
+  if (kind === 'fox') { R('#e07a2a', -3, -1 - hop, 6, 3); R('#e07a2a', 2, -3 - hop, 3, 3); R('#f2f2f2', 4, -2 - hop, 1, 1); R('#1a1a1a', 3, -3 - hop, 1, 1); R('#e07a2a', -5, -2 - hop, 2, 2); R('#f2f2f2', -6, -2 - hop, 1, 1); }
+  if (kind === 'bunny') { R('#f2f2f2', -2, -1 - hop * 2, 5, 3); R('#f2f2f2', 1, -4 - hop * 2, 1, 3); R('#f2f2f2', 3, -4 - hop * 2, 1, 3); R('#f08aa0', 2, -1 - hop * 2, 1, 1); }
+  if (kind === 'robot dog') { R('#9aa3ad', -3, -2 - hop, 6, 3); R('#9aa3ad', 2, -4 - hop, 3, 3); R('#58c4f0', 3, -3 - hop, 1, 1); R('#6f777f', -2, 1, 1, 2); R('#6f777f', 1, 1, 1, 2); }
 }
 
 // the state each agent shows in town
@@ -229,9 +295,14 @@ export function mountVillage(host, agents, { onSelect, selected, reduced, decor,
   const layer = document.createElement('div'); layer.className = 'village-layer';
   wrap.append(canvas, layer); host.append(wrap);
   const g = canvas.getContext('2d'); g.imageSmoothingEnabled = false;
+  const set = decor.settings || {};
   const hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hour: 'numeric', hourCycle: 'h23' }).format(new Date()));
-  const night = hour >= 19 || hour < 7;
-  const bg = document.createElement('canvas'); bg.width = W; bg.height = H; drawGround(bg.getContext('2d'));
+  const night = set.time === 'night' || (set.time !== 'day' && set.time !== 'sunset' && (hour >= 19 || hour < 7));
+  const sunset = set.time === 'sunset' || (set.time === 'auto' || !set.time) && (hour === 18 || hour === 7);
+  const bg = document.createElement('canvas'); bg.width = W; bg.height = H; drawGround(bg.getContext('2d'), set.ground);
+  // weather: a few hundred particles drawn over the town
+  const wr = rng('weather'), parts = set.weather && set.weather !== 'none' ? Array.from({ length: set.weather === 'rain' ? 160 : 90 }, () => ({ x: wr() * W, y: wr() * H, s: 0.5 + wr(), d: wr() * 6 })) : [];
+  const gateName = document.createElement('span'); gateName.className = 'v-gate'; gateName.textContent = set.name || ''; gateName.hidden = !set.name;
   const items = () => decor.items || STARTER_DECOR;
 
   let plot = 0;
@@ -247,10 +318,15 @@ export function mountVillage(host, agents, { onSelect, selected, reduced, decor,
   const tags = people.map(p => {
     const sign = document.createElement('span'); sign.className = 'v-sign'; sign.textContent = p.a.name;
     const bub = document.createElement('span'); bub.className = 'v-bubble v-' + p.m; bub.textContent = BUBBLE[p.m] || ''; bub.hidden = !BUBBLE[p.m];
+    if (p.a.unread_out) { bub.className = 'v-bubble v-mail'; bub.textContent = 'New reply for you'; bub.hidden = false; p.fixedBubble = true; } else p.fixedBubble = !!BUBBLE[p.m];
     const hit = document.createElement('button'); hit.type = 'button'; hit.className = 'v-hit'; hit.setAttribute('aria-label', p.a.name + ': ' + (p.a.role || '') + '. Show their house');
     hit.addEventListener('click', e => { if (edit) return; e.stopPropagation(); select(p); });
     layer.append(sign, bub, hit); return { sign, bub, hit };
   });
+  layer.append(gateName);
+  // idle chatter: now and then someone says their catchphrase or what they last did
+  const lines = p => { const pe = p.a.personality || {}; const out = []; if (pe.catchphrase) out.push(pe.catchphrase); if (p.a.last_summary) out.push(p.a.last_summary.length > 60 ? p.a.last_summary.slice(0, 57) + '…' : p.a.last_summary); if (p.a.next) out.push('Back at my desk ' + new Date(p.a.next).toLocaleString('en-GB', { weekday: 'short', hour: 'numeric', minute: '2-digit' })); return out; };
+  let chatT = 0;
   let sel = people.find(p => p.a.id === selected) || null;
   function select(p) { sel = p; onSelect && onSelect(p.a); }
 
@@ -297,12 +373,26 @@ export function mountVillage(host, agents, { onSelect, selected, reduced, decor,
           else { const v = (p.robot ? 0.03 : 0.022) * dt; p.x += dx / d * Math.min(v, d); p.y += dy / d * Math.min(v, d); p.moving = true; p.dir = dx > 0.2 ? 1 : dx < -0.2 ? -1 : p.dir; }
         } else p.moving = false;
         draws.push({ y: p.y + 6, f: () => drawPerson(g, p.x, p.y, p.look, { t, moving: p.moving, dir: p.dir, robot: p.robot }) });
+        const pet = LOOK.pet[p.look.pet];
+        if (pet && pet !== 'none' && !p.robot) { p.px = (p.px ?? p.x) + ((p.x - 8 * p.dir) - (p.px ?? p.x)) * Math.min(1, dt / 300); p.py = (p.py ?? p.y) + ((p.y + 4) - (p.py ?? p.y)) * Math.min(1, dt / 300); draws.push({ y: p.py + 3, f: () => drawPet(g, p.px, p.py, pet, t, p.moving) }); }
       }
     }
     draws.sort((a, b) => a.y - b.y).forEach(d => d.f());
     if (sel && !edit) { g.strokeStyle = '#ffe08a'; g.lineWidth = 1; if (sel.m === 'busy') g.strokeRect(Math.round(sel.spot.x * T) - 1.5, Math.round(sel.spot.y * T) + 0.5, sel.spot.w * T + 3, sel.spot.h * T); else g.strokeRect(Math.round(sel.x) - 7.5, Math.round(sel.y) - 13.5, 15, 23); }
+    if (parts.length) for (const q of parts) {
+      if (set.weather === 'rain') { q.y += 0.35 * dt * q.s; q.x -= 0.05 * dt; g.fillStyle = 'rgba(180,210,240,0.6)'; g.fillRect(q.x, q.y, 1, 4); }
+      else if (set.weather === 'snow') { q.y += 0.03 * dt * q.s; q.x += Math.sin(t / 900 + q.d) * 0.15; g.fillStyle = '#ffffff'; g.fillRect(q.x, q.y, q.s > 1 ? 2 : 1, q.s > 1 ? 2 : 1); }
+      else { q.y += 0.025 * dt * q.s; q.x += Math.sin(t / 700 + q.d) * 0.3; g.fillStyle = set.weather === 'petals' ? '#f7b7cf' : ['#d0702a', '#e8a03a', '#b0453a'][Math.floor(q.d) % 3]; g.fillRect(q.x, q.y, 2, 1); }
+      if (q.y > H) { q.y = -4; q.x = wr() * W; } if (q.x < 0) q.x = W;
+    }
+    if (set.weather === 'rain') { g.fillStyle = 'rgba(40,60,90,0.12)'; g.fillRect(0, 0, W, H); }
+    if (sunset && !night) { g.fillStyle = 'rgba(240,120,60,0.16)'; g.fillRect(0, 0, W, H); }
     if (night) { g.fillStyle = PAL.night; g.fillRect(0, 0, W, H); for (const p of people) if (p.m !== 'asleep') { g.fillStyle = 'rgba(255,216,107,0.18)'; g.beginPath(); g.arc((p.spot.x + p.spot.w / 2) * T, (p.spot.y + p.spot.h) * T, 18, 0, Math.PI * 2); g.fill(); } for (const it of items()) if (it.k === 'lamp') { g.fillStyle = 'rgba(255,216,107,0.22)'; g.beginPath(); g.arc(it.x, it.y - 8, 14, 0, Math.PI * 2); g.fill(); } }
+    place(gateName, GATE.x, H - 32);
+    chatT -= dt;
+    if (chatT <= 0 && !edit) { chatT = 5000 + Math.random() * 5000; const idle = people.map((p, i) => [p, i]).filter(([p]) => !p.fixedBubble && lines(p).length); if (idle.length) { const [p, i] = idle[Math.floor(Math.random() * idle.length)]; const ls = lines(p); tags[i].bub.textContent = ls[Math.floor(Math.random() * ls.length)]; tags[i].bub.className = 'v-bubble v-chat'; tags[i].bub.hidden = false; p.chatUntil = t + 3800; } }
     people.forEach((p, i) => {
+      if (!p.fixedBubble && p.chatUntil && t > p.chatUntil) { tags[i].bub.hidden = true; p.chatUntil = 0; }
       const bx = p.m === 'busy' ? p.door.x : p.x, by = p.m === 'busy' ? p.spot.y * T + 2 : p.y - 12;
       place(tags[i].bub, bx, by); place(tags[i].sign, (p.spot.x + p.spot.w / 2) * T, (p.spot.y + p.spot.h) * T + 2);
       const hx = p.m === 'busy' ? (p.spot.x + p.spot.w / 2) * T : p.x, hy = p.m === 'busy' ? (p.spot.y + p.spot.h / 2) * T : p.y - 3;
@@ -321,6 +411,6 @@ export function itemIcon(k) {
   g.fillStyle = 'rgba(91,143,58,0.25)'; g.fillRect(0, 0, 32, 32); drawItem(g, k, 16, 20, 0); c.setAttribute('aria-hidden', 'true'); return c;
 }
 export function personIcon(look, scale = 4) {
-  const c = document.createElement('canvas'); c.width = 16 * scale; c.height = 22 * scale; const g = c.getContext('2d'); g.imageSmoothingEnabled = false;
-  g.scale(scale, scale); drawPerson(g, 8, 12, look, {}); c.setAttribute('aria-hidden', 'true'); return c;
+  const c = document.createElement('canvas'); c.width = 22 * scale; c.height = 24 * scale; const g = c.getContext('2d'); g.imageSmoothingEnabled = false;
+  g.scale(scale, scale); drawPerson(g, 12, 14, look, {}); const pet = LOOK.pet[look.pet]; if (pet && pet !== 'none') drawPet(g, 4, 19, pet, 0, false); c.setAttribute('aria-hidden', 'true'); return c;
 }
