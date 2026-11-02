@@ -135,7 +135,7 @@ async function team(env) {
 
 export async function adminAgents(env, id, sub, m, body, log) {
   await ensureAgents(env);
-  if (!id && m === 'GET') return reply({ agents: await team(env), now: now(), templates: TEMPLATES, schedules: SCHEDULES.map(([k, l]) => ({ id: k, label: l })) });
+  if (!id && m === 'GET') { const agents = await team(env); return reply({ agents, town: await townData(env, agents), ai: !!env.AI, now: now(), templates: TEMPLATES, schedules: SCHEDULES.map(([k, l]) => ({ id: k, label: l })) }); }
   if (!id && m === 'POST') {
     // Charlie designs a new agent in the village; the Boss sets it up as a scheduled task next morning
     const name = clean(body.name, 40), business = clean(body.business, 80) || 'NEMORA', tpl = TEMPLATES.find(t => t.id === body.template) || TEMPLATES[TEMPLATES.length - 1];
@@ -179,7 +179,10 @@ export async function adminAgents(env, id, sub, m, body, log) {
       if (n >= 20) return reply({ error: 'They already have 20 unread messages. Wait for them to catch up.' }, 429);
       await env.DB.prepare("INSERT INTO agent_msgs (agent, dir, kind, text, status, created) VALUES (?, 'in', ?, ?, 'new', ?)").bind(a.id, kind, text, now()).run();
       await log((kind === 'task' ? 'Gave a job to ' : 'Sent a message to ') + a.name);
-      return reply({ ok: true });
+      // an instant hello in their own voice (free Cloudflare AI); if it's unavailable they simply reply on their next run
+      const quick = body.quick === false ? '' : await quickReply(env, a, text, kind).catch(e => { console.error('quick reply', e); return ''; });
+      if (quick) await env.DB.prepare("INSERT INTO agent_msgs (agent, dir, kind, text, status, created) VALUES (?, 'out', 'quick', ?, 'read', ?)").bind(a.id, quick, now()).run();
+      return reply({ ok: true, quick });
     }
   }
   if (m === 'PATCH' && body.personality !== undefined) {
@@ -241,7 +244,8 @@ const items = (list, keys, w, h, max) => (Array.isArray(list) ? list : []).filte
 export async function adminVillage(env, url, m, body, log) {
   await ensureAgents(env);
   const biz = clean(url.searchParams.get('b') || body.business || 'NEMORA', 80) || 'NEMORA', key = 'village:' + biz.toLowerCase();
-  if (m === 'GET') { const row = await env.DB.prepare('SELECT value FROM config WHERE key = ?').bind(key).first(); let v = {}; try { v = JSON.parse((row || {}).value || '{}'); } catch (e) {} return reply({ business: biz, decor: v }); }
+  if (m === 'GET') { const row = await env.DB.prepare('SELECT value FROM config WHERE key = ?').bind(key).first(); let v = {}; try { v = JSON.parse((row || {}).value || '{}'); } catch (e) {} const tok = await cfg(env, 'vshare:' + biz.toLowerCase()); return reply({ business: biz, decor: v, share: tok ? '/town/' + tok : '' }); }
+  if (m === 'POST' && body.share !== undefined) { const tok = await shareVillage(env, biz, !!body.share, log); return reply({ ok: true, share: tok ? '/town/' + tok : '' }); }
   if (m === 'PUT') {
     const d = body.decor || {}, out = {};
     if (Array.isArray(d.items)) out.items = items(d.items, TOWN_KEYS, 480, 272, 250);
@@ -253,4 +257,101 @@ export async function adminVillage(env, url, m, body, log) {
     return reply({ ok: true, decor: out });
   }
   return reply({ error: 'Not found.' }, 404);
+}
+
+/* ---------- the town: real numbers, things waiting for Charlie, stuck agents, handoffs, Lyn's brief ---------- */
+const safe = async (f, d) => { try { return await f(); } catch (e) { return d; } };
+const londonDay = (d = new Date()) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/London' }).format(d);
+function londonMidnight() {
+  const d = new Date(), off = new Date(d.toLocaleString('en-US', { timeZone: 'Europe/London' })) - new Date(d.toLocaleString('en-US', { timeZone: 'UTC' }));
+  return new Date(Date.parse(londonDay(d) + 'T00:00:00Z') - off).toISOString();
+}
+export async function townData(env, rows) {
+  const n = (s, ...b) => safe(async () => ((await env.DB.prepare(s).bind(...b).first()) || {}).n || 0, null);
+  const all = (s, ...b) => safe(async () => (await env.DB.prepare(s).bind(...b).all()).results || [], []);
+  const today = londonMidnight(), week = new Date(Date.now() - 7 * 864e5).toISOString(), ten = new Date(Date.now() - 10 * 864e5).toISOString(), day = londonDay();
+  const sites = await all("SELECT state, monitor FROM sites WHERE status = 'live'");
+  const nextPost = await safe(async () => ((await env.DB.prepare("SELECT scheduled_at FROM social_posts WHERE status IN ('approved', 'needs_approval') AND scheduled_at > ? ORDER BY scheduled_at LIMIT 1").bind(now()).first()) || {}).scheduled_at || '', '');
+  const board = {
+    sent_today: await n("SELECT COUNT(*) n FROM sendlog WHERE sent_at >= ? AND lower(kind) != 'reply'", today),
+    sent_week: await n("SELECT COUNT(*) n FROM sendlog WHERE sent_at >= ? AND lower(kind) != 'reply'", week),
+    interested: await n("SELECT COUNT(*) n FROM leads WHERE status = 'interested'"),
+    posts_week: await n("SELECT COUNT(*) n FROM social_posts WHERE status = 'posted' AND posted_at >= ?", week),
+    sites_live: sites.length, sites_down: sites.filter(s => s.monitor && s.state === 'down').length,
+    next_post: nextPost
+  };
+  // things waiting for Charlie's OK, held up by the agent responsible
+  const approvals = {};
+  const vids = await all("SELECT id, kind, caption, media, scheduled_at FROM social_posts WHERE status = 'needs_approval' ORDER BY scheduled_at LIMIT 10");
+  if (vids.length) approvals.social = vids.map(v => { let media = []; try { media = JSON.parse(v.media || '[]'); } catch (e) {} return { type: 'post', id: v.id, kind: v.kind, caption: String(v.caption || '').slice(0, 600), media: media.filter(u => /^https:\/\/nemora\.uk\//.test(u)).slice(0, 10), scheduled_at: v.scheduled_at }; });
+  // honest moods: switched on and running, but not producing anything
+  const stuck = {}; const on = id => rows.some(a => a.id === id && a.enabled && a.status === 'active');
+  if (on('outreach') && board.sent_week === 0) { const lastSent = await safe(async () => ((await env.DB.prepare("SELECT MAX(sent_at) m FROM sendlog WHERE lower(kind) != 'reply'").first()) || {}).m || '', ''); stuck.outreach = lastSent ? 'No emails sent in 7 days' : 'Hasn\'t sent a single email yet'; }
+  if (on('social') && !(await n("SELECT COUNT(*) n FROM social_posts WHERE (status = 'posted' AND posted_at >= ?) OR status IN ('approved', 'needs_approval', 'publishing')", ten))) stuck.social = 'Nothing posted or planned in 10 days';
+  // handoffs in the last day: 'Passed on by <name>: ...'
+  const byName = Object.fromEntries(rows.map(a => [a.name.toLowerCase(), a.id]));
+  const handoffs = (await all("SELECT id, agent, text, created FROM agent_msgs WHERE dir = 'in' AND kind = 'task' AND text LIKE 'Passed on by %' AND created >= ? ORDER BY id DESC LIMIT 8", new Date(Date.now() - 864e5).toISOString()))
+    .map(m => { const who = (String(m.text).match(/^Passed on by (?:the )?([^:]{1,40}):/i) || [])[1]; return { id: m.id, from: byName[String(who || '').trim().toLowerCase()] || '', to: m.agent, created: m.created }; }).filter(x => x.from && x.from !== x.to);
+  // Lyn's morning card
+  const brief = await safe(() => env.DB.prepare("SELECT text, created FROM agent_msgs WHERE agent = 'lyn' AND dir = 'out' AND kind = 'brief' AND created >= ? ORDER BY id DESC LIMIT 1").bind(today).first(), null);
+  const notes = await safe(async () => JSON.parse(((await env.DB.prepare("SELECT value FROM config WHERE key = 'lyn_notes'").first()) || {}).value || '{}'), {});
+  const due = (Array.isArray(notes.items) ? notes.items : []).filter(i => i && !i.done && i.due && String(i.due).slice(0, 10) <= day).slice(0, 6).map(i => ({ text: String(i.text || '').slice(0, 160), due: String(i.due).slice(0, 10), late: String(i.due).slice(0, 10) < day }));
+  return { board, approvals, stuck, handoffs, lyn: { brief: brief ? { text: String(brief.text).slice(0, 1500), created: brief.created } : null, due } };
+}
+
+/* ---------- instant replies: a quick in-character hello from Cloudflare's free AI; the real answer comes on the agent's next run ---------- */
+const AI_PER_DAY = 120;
+const AI_MODELS = ['@cf/meta/llama-3.3-70b-instruct-fp8-fast', '@cf/meta/llama-3.1-8b-instruct'];
+async function quickReply(env, a, text, kind) {
+  if (!env.AI || a.kind === 'system') return '';
+  const key = 'aiq:' + londonDay(), used = parseInt(await env.KV.get(key), 10) || 0;
+  if (used >= AI_PER_DAY) return '';
+  await env.KV.put(key, String(used + 1), { expirationTtl: 2 * 86400 });
+  let pe = {}; try { pe = JSON.parse(a.personality || '{}'); } catch (e) {}
+  const next = a.enabled && a.status === 'active' ? cronStep(a.cron, a.tz || 'Europe/London', new Date(), 1) : '';
+  const when = next ? new Date(next).toLocaleString('en-GB', { timeZone: 'Europe/London', weekday: 'long', hour: 'numeric', minute: '2-digit' }) : '';
+  const runNote = a.status === 'hiring' ? 'You have not started yet: the Boss sets you up tomorrow morning, and you will read this then.' : !a.enabled ? 'You are paused right now, so you will read this properly when Charlie switches you back on.' : 'Your real work, including reading this message properly, happens on your next scheduled run' + (when ? ', ' + when : '') + '.';
+  const sys = [
+    `You are ${a.name}, one of the AI agents working for Charlie (also called CJ), who runs NEMORA, a small UK web design studio, with Daniel.`,
+    `Your role: ${a.role}. Your job: ${a.job}`,
+    `Your personality: ${(pe.traits || []).join(', ') || 'friendly'}. ${pe.about || ''}` + (pe.catchphrase ? ` Your catchphrase, which you use only now and then: "${pe.catchphrase}".` : ''),
+    `This is an instant reply in the chat in Charlie's admin. Right now you cannot do any work, look anything up or see any data. ${runNote}`,
+    `Reply in character in 1 to 3 short sentences. Acknowledge what he said. ${kind === 'task' ? 'He has given you a job: say you will do it on your next run (say when), or, if it is not your kind of job, that you will pass it to the right agent then.' : 'If he asks for something, say you will handle it on your next run.'}`,
+    'Never claim you have done anything. Never state facts, numbers, names, prices or dates you were not given here. Never promise results. Never ask for passwords, codes or payment details. British English. No emojis unless he uses them.'
+  ].join('\n');
+  const hist = ((await env.DB.prepare('SELECT dir, text FROM agent_msgs WHERE agent = ? ORDER BY id DESC LIMIT 7').bind(a.id).all()).results || []).reverse().slice(0, -1)
+    .map(m => ({ role: m.dir === 'in' ? 'user' : 'assistant', content: String(m.text).slice(0, 600) }));
+  const messages = [{ role: 'system', content: sys }, ...hist, { role: 'user', content: text }];
+  for (const model of AI_MODELS) {
+    try { const r = await env.AI.run(model, { messages, max_tokens: 160, temperature: 0.7 }); const out = clean(r && r.response, 600).replace(/^["']|["']$/g, ''); if (out) return out; }
+    catch (e) { console.error('quick reply failed', model, e && e.message); }
+  }
+  return '';
+}
+
+/* ---------- read-only village links for a business (for clients who pay for agents later) ---------- */
+const TOKEN = /^[a-f0-9]{32}$/;
+async function cfg(env, key) { return ((await env.DB.prepare('SELECT value FROM config WHERE key = ?').bind(key).first()) || {}).value || ''; }
+async function setCfg(env, key, value) { await env.DB.prepare('INSERT INTO config (key, value, updated) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated = excluded.updated').bind(key, value, now()).run(); }
+export async function shareVillage(env, biz, make, log) {
+  const k = 'vshare:' + biz.toLowerCase(), old = await cfg(env, k);
+  if (old) await env.DB.prepare('DELETE FROM config WHERE key = ?').bind('vtok:' + old).run();
+  if (!make) { await env.DB.prepare('DELETE FROM config WHERE key = ?').bind(k).run(); await log('Turned off the view-only village link for ' + biz); return ''; }
+  const tok = [...crypto.getRandomValues(new Uint8Array(16))].map(b => b.toString(16).padStart(2, '0')).join('');
+  await setCfg(env, k, tok); await setCfg(env, 'vtok:' + tok, biz);
+  await log((old ? 'Made a new' : 'Made a') + ' view-only village link for ' + biz);
+  return tok;
+}
+export async function publicTown(req, env, url) {
+  const mm = url.pathname.match(/^\/town\/([a-f0-9]{32})(\/data)?\/?$/);
+  if (!mm || !TOKEN.test(mm[1])) return null;
+  await ensureAgents(env);
+  const biz = await cfg(env, 'vtok:' + mm[1]);
+  if (!biz) return new Response('This village link has been turned off.', { status: 404, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
+  if (!mm[2]) return env.ASSETS.fetch(new Request(url.origin + '/town/', { headers: req.headers }));
+  // only what a visitor should see: names, looks, whether they're working, asleep or due back. No logs, summaries, messages or numbers.
+  const rows = (await team(env)).filter(a => (a.business || 'NEMORA').toLowerCase() === biz.toLowerCase() && a.status !== 'retired');
+  let decor = {}; try { decor = JSON.parse(await cfg(env, 'village:' + biz.toLowerCase()) || '{}'); } catch (e) {}
+  const agents = rows.map(a => ({ id: a.id, name: a.name, role: a.role, kind: a.kind, enabled: a.enabled, status: a.status, health: ['hiring', 'retiring', 'paused'].includes(a.health) ? a.health : 'ok', last_run: a.last_run && Date.now() - Date.parse(a.last_run) < 20 * 60000 ? a.last_run : '', next: a.next, look: a.look, personality: { catchphrase: (a.personality || {}).catchphrase || '' } }));
+  return new Response(JSON.stringify({ business: biz, decor: { items: decor.items, houses: decor.houses, rooms: decor.rooms, settings: decor.settings }, agents }), { headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } });
 }

@@ -19,7 +19,7 @@
 
 import { adminBiz, checkAllSites } from './biz.js';
 import { publishDue, refreshInsights, metaCallback } from './social.js';
-import { autopilotBeat } from './agents.js';
+import { autopilotBeat, publicTown } from './agents.js';
 import { adminBuilds, publicBuild } from './builds.js';
 
 const SESSION_TTL = 8 * 60 * 60;
@@ -76,6 +76,7 @@ async function route(req, env, ctx) {
   if (p === '/' ) return redirect(url.origin + '/admin/');
   if (p === '/meta/callback' && m === 'GET') return metaCallback(req, env, url);
   if ((p.startsWith('/v/') || p.startsWith('/b/img/')) && m === 'GET' && env.DB) { const r = await publicBuild(req, env, url); if (r) return r; }
+  if (p.startsWith('/town/') && m === 'GET' && env.DB) { const r = await publicTown(req, env, url); if (r) return adminHeaders(r); }
   if (p === '/api/setup-state' && m === 'GET') { const cr = await credentials(env); return json({ needsSetup: !cr.hash, hasCode: !!env.SETUP_CODE }); }
   if (p === '/api/setup') return m === 'POST' ? setup(req, env, url) : notAllowed();
   if (p === '/api/login') return m === 'POST' ? login(req, env, url) : notAllowed();

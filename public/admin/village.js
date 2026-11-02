@@ -235,9 +235,16 @@ export function mood(a) {
   if (!a.enabled) return 'asleep';
   if (['missed', 'failed', 'attention'].includes(a.health)) return 'trouble';
   if (a.last_run && Date.now() - Date.parse(a.last_run) < 20 * 60000 && a.kind !== 'system') return 'busy';
+  if (a.stuck) return 'stuck';
   return 'idle';
 }
-const BUBBLE = { hiring: 'Starts tomorrow', leaving: 'Leaving', asleep: 'Zz', trouble: '!', busy: 'Working…' };
+const BUBBLE = { hiring: 'Starts tomorrow', leaving: 'Leaving', asleep: 'Zz', trouble: '!', busy: 'Working…', stuck: 'Stuck' };
+const bubbleText = a => BUBBLE[mood(a)] || '';
+// a little grey raincloud over someone who's switched on but getting nowhere
+function drawCloud(g, x, y, t) {
+  g.fillStyle = '#8d939e'; g.fillRect(x - 6, y - 2, 12, 4); g.fillRect(x - 4, y - 4, 7, 2); g.fillRect(x - 1, y - 5, 5, 2);
+  g.fillStyle = '#6fa8dc'; const k = Math.floor(t / 180) % 3; for (let i = 0; i < 3; i++) g.fillRect(x - 4 + i * 4, y + 3 + ((k + i) % 3), 1, 2);
+}
 
 /* ---------- the room view: one agent's house from the inside ---------- */
 export const RW = 240, RH = 144;
@@ -265,10 +272,11 @@ export function drawRoom(g, a, style, t, edit) {
     g.fillStyle = '#7a5236'; g.fillRect(desk.x - 26, desk.y, 52, 8); g.fillStyle = '#5a3b22'; g.fillRect(desk.x - 24, desk.y + 8, 4, 12); g.fillRect(desk.x + 20, desk.y + 8, 4, 12);
     // computer: its screen shows the agent's state
     const mx = desk.x + 10; g.fillStyle = '#2d2f38'; g.fillRect(mx - 10, desk.y - 18, 22, 16); g.fillRect(mx, desk.y - 2, 3, 2);
-    const scr = m === 'busy' ? '#16324a' : m === 'trouble' ? '#4a1616' : m === 'asleep' ? '#111318' : '#16324a';
+    const scr = m === 'busy' ? '#16324a' : m === 'trouble' ? '#4a1616' : m === 'asleep' || m === 'stuck' ? '#111318' : '#16324a';
     g.fillStyle = scr; g.fillRect(mx - 8, desk.y - 16, 18, 12);
     if (m === 'busy') { g.fillStyle = '#7fd0f5'; for (let i = 0; i < 4; i++) g.fillRect(mx - 7, desk.y - 15 + i * 3, 4 + ((Math.floor(t / 120) + i * 3) % 12), 1); }
     else if (m === 'trouble') { g.fillStyle = Math.floor(t / 400) % 2 ? '#ff6b61' : '#ffffff'; g.fillRect(mx, desk.y - 14, 2, 5); g.fillRect(mx, desk.y - 8, 2, 2); }
+    else if (m === 'stuck') { g.fillStyle = '#5a6070'; g.fillRect(mx - 2, desk.y - 10, 1, 1); g.fillRect(mx + 1, desk.y - 10, 1, 1); g.fillRect(mx + 4, desk.y - 10, 1, 1); }
     else if (m !== 'asleep') { g.fillStyle = '#4a7090'; g.fillRect(mx - 6, desk.y - 13, 14, 1); g.fillRect(mx - 6, desk.y - 10, 9, 1); }
     g.fillStyle = '#c8ccd2'; g.fillRect(desk.x - 14, desk.y + 2, 14, 2); g.fillStyle = '#e9dcc0'; g.fillRect(desk.x - 22, desk.y + 1, 6, 4);
   };
@@ -279,21 +287,24 @@ export function drawRoom(g, a, style, t, edit) {
   const S = (x, y, o) => { g.save(); g.translate(x, y); g.scale(2, 2); drawPerson(g, 0, 0, look, { ...o, t }); g.restore(); };
   if (m === 'asleep') { g.save(); g.translate(206, 103); g.scale(2, 2); drawPerson(g, 0, 0, look, { lying: true }); g.restore(); }
   drawDesk();
-  if (m === 'busy' || m === 'trouble') { g.fillStyle = '#3b3f4a'; g.fillRect(desk.x - 18, desk.y - 8, 16, 10); S(desk.x - 10, desk.y - 2, { seated: true, robot: a.kind === 'system' }); g.fillStyle = '#7a5236'; g.fillRect(desk.x - 26, desk.y + 2, 30, 6); g.fillStyle = '#c8ccd2'; g.fillRect(desk.x - 16, desk.y + 2, 12, 2); }
+  if (m === 'busy' || m === 'trouble' || m === 'stuck') { g.fillStyle = '#3b3f4a'; g.fillRect(desk.x - 18, desk.y - 8, 16, 10); S(desk.x - 10, desk.y - 2, { seated: true, robot: a.kind === 'system' }); g.fillStyle = '#7a5236'; g.fillRect(desk.x - 26, desk.y + 2, 30, 6); g.fillStyle = '#c8ccd2'; g.fillRect(desk.x - 16, desk.y + 2, 12, 2); }
   if (m === 'idle' || m === 'hiring' || m === 'leaving') S(60 + Math.sin(t / 1400) * 18, 108, { moving: true, robot: a.kind === 'system', dir: Math.cos(t / 1400) > 0 ? 1 : -1 });
   for (const it of items.filter(i => i.y >= desk.y)) drawItem(g, it.k, it.x, it.y, t);
+  if (m === 'stuck') { g.save(); g.translate(desk.x - 10, desk.y - 34); g.scale(2, 2); drawCloud(g, 0, 0, t); g.restore(); }
   if (m === 'asleep') { g.fillStyle = '#26305c'; const zz = Math.floor(t / 500) % 3; for (let i = 0; i <= zz; i++) { g.fillRect(216 + i * 6, 88 - i * 6, 4, 1); g.fillRect(219 + i * 6, 89 - i * 6, 1, 1); g.fillRect(218 + i * 6, 90 - i * 6, 1, 1); g.fillRect(216 + i * 6, 91 - i * 6, 4, 1); } }
   if (edit) { g.strokeStyle = 'rgba(212,176,106,0.6)'; g.setLineDash([3, 3]); g.strokeRect(0.5, 56.5, RW - 1, RH - 57); g.setLineDash([]); }
 }
 
 /* ---------- the town ---------- */
-export function mountVillage(host, agents, { onSelect, selected, reduced, decor, edit } = {}) {
+export function mountVillage(host, agents, { onSelect, onApprove, handoffs, selected, reduced, decor, edit, readOnly } = {}) {
   decor = decor || {};
   const wrap = document.createElement('div'); wrap.className = 'village' + (edit ? ' editing' : '');
+  const zoomer = document.createElement('div'); zoomer.className = 'village-zoom';
   const canvas = document.createElement('canvas'); canvas.width = W; canvas.height = H; canvas.setAttribute('role', 'img');
-  canvas.setAttribute('aria-label', 'Village map: ' + agents.map(a => `${a.name}, ${(BUBBLE[mood(a)] || 'around town').replace('…', '')}`).join('; '));
+  canvas.setAttribute('aria-label', 'Village map: ' + agents.map(a => `${a.name}, ${(bubbleText(a) || 'around town').replace('…', '')}`).join('; '));
   const layer = document.createElement('div'); layer.className = 'village-layer';
-  wrap.append(canvas, layer); host.append(wrap);
+  zoomer.append(canvas, layer); wrap.append(zoomer); host.append(wrap);
+  const zoom = zoomControls(wrap, zoomer);
   const g = canvas.getContext('2d'); g.imageSmoothingEnabled = false;
   const set = decor.settings || {};
   const hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hour: 'numeric', hourCycle: 'h23' }).format(new Date()));
@@ -317,23 +328,31 @@ export function mountVillage(host, agents, { onSelect, selected, reduced, decor,
 
   const tags = people.map(p => {
     const sign = document.createElement('span'); sign.className = 'v-sign'; sign.textContent = p.a.name;
-    const bub = document.createElement('span'); bub.className = 'v-bubble v-' + p.m; bub.textContent = BUBBLE[p.m] || ''; bub.hidden = !BUBBLE[p.m];
-    if (p.a.unread_out) { bub.className = 'v-bubble v-mail'; bub.textContent = 'New reply for you'; bub.hidden = false; p.fixedBubble = true; } else p.fixedBubble = !!BUBBLE[p.m];
+    const waiting = (p.a.approvals || []).length;
+    // something waiting for Charlie's OK: the agent holds up a sign he can tap
+    const bub = document.createElement(waiting && onApprove ? 'button' : 'span'); bub.className = 'v-bubble v-' + p.m; bub.textContent = bubbleText(p.a); bub.hidden = !bub.textContent;
+    if (waiting && onApprove) { bub.type = 'button'; bub.className = 'v-bubble v-ok'; bub.textContent = 'Needs your OK' + (waiting > 1 ? ' (' + waiting + ')' : ''); bub.hidden = false; p.fixedBubble = true; bub.addEventListener('click', e => { e.stopPropagation(); onApprove(p.a); }); }
+    else if (p.a.unread_out) { bub.className = 'v-bubble v-mail'; bub.textContent = 'New reply for you'; bub.hidden = false; p.fixedBubble = true; } else p.fixedBubble = !!bub.textContent;
     const hit = document.createElement('button'); hit.type = 'button'; hit.className = 'v-hit'; hit.setAttribute('aria-label', p.a.name + ': ' + (p.a.role || '') + '. Show their house');
-    hit.addEventListener('click', e => { if (edit) return; e.stopPropagation(); select(p); });
+    hit.addEventListener('click', e => { if (edit || zoom.dragged()) return; e.stopPropagation(); select(p); });
     layer.append(sign, bub, hit); return { sign, bub, hit };
   });
   layer.append(gateName);
   // idle chatter: now and then someone says their catchphrase or what they last did
   const lines = p => { const pe = p.a.personality || {}; const out = []; if (pe.catchphrase) out.push(pe.catchphrase); if (p.a.last_summary) out.push(p.a.last_summary.length > 60 ? p.a.last_summary.slice(0, 57) + '…' : p.a.last_summary); if (p.a.next) out.push('Back at my desk ' + new Date(p.a.next).toLocaleString('en-GB', { weekday: 'short', hour: 'numeric', minute: '2-digit' })); return out; };
   let chatT = 0;
+  // jobs agents passed to each other today fly across town as letters, once each
+  let seen = new Set(); try { seen = new Set(JSON.parse(sessionStorage.getItem('v-letters') || '[]')); } catch (e) {}
+  const queue = edit ? [] : (handoffs || []).filter(h => !seen.has(h.id)).slice(0, 5).reverse();
+  let letter = null, nextLetter = performance.now() + 1500;
+  const letterTag = document.createElement('span'); letterTag.className = 'v-letter'; letterTag.hidden = true; layer.append(letterTag);
   let sel = people.find(p => p.a.id === selected) || null;
   function select(p) { sel = p; onSelect && onSelect(p.a); }
 
   // decorating the town: tap empty grass to place the chosen thing, tap a placed thing to remove it
   const toWorld = e => { const b = canvas.getBoundingClientRect(); return { x: (e.clientX - b.left) / b.width * W, y: (e.clientY - b.top) / b.height * H }; };
   canvas.addEventListener('click', e => {
-    if (!edit) return; const pt = toWorld(e);
+    if (!edit || zoom.dragged()) return; const pt = toWorld(e);
     const list = items().slice(); const hitI = list.findIndex(it => Math.abs(it.x - pt.x) < 9 && Math.abs(it.y - pt.y) < 10);
     if (hitI >= 0 && (edit.tool === 'remove' || !edit.tool)) list.splice(hitI, 1);
     else if (edit.tool && edit.tool !== 'remove') { if (list.length >= 250) return; list.push({ k: edit.tool, x: Math.round(pt.x), y: Math.round(pt.y) }); }
@@ -366,19 +385,30 @@ export function mountVillage(host, agents, { onSelect, selected, reduced, decor,
       const open = p.m === 'busy';
       draws.push({ y: (p.spot.y + p.spot.h) * T - 1, f: () => { p.desk = drawBuilding(g, p.spot, { open, lit: night && p.m !== 'asleep', wall: hs.wall != null ? WALLS[hs.wall] : null, roof: hs.roof != null ? ROOFS[hs.roof] : null, door: hs.door, floor: (decor.rooms || {})[p.a.id] && FLOORS[(decor.rooms[p.a.id]).floor], paper: (decor.rooms || {})[p.a.id] && PAPERS[(decor.rooms[p.a.id]).paper] }, t); if (open && p.desk) drawPerson(g, p.desk.deskX - 10, p.desk.deskY - 2, p.look, { seated: true, t, robot: p.robot }); } });
       if (!open) {
-        const still = reduced || edit || ['asleep', 'trouble', 'hiring', 'leaving'].includes(p.m);
+        const still = reduced || edit || ['asleep', 'trouble', 'hiring', 'leaving', 'stuck'].includes(p.m);
         if (!still) {
           const dx = p.tx - p.x, dy = p.ty - p.y, d = Math.hypot(dx, dy);
           if (d < 1) { p.moving = false; p.wait -= dt; if (p.wait <= 0) { const nt = pickTarget(p); p.tx = nt.x; p.ty = nt.y; p.wait = p.robot ? 300 : 1500 + p.r() * 4500; } }
           else { const v = (p.robot ? 0.03 : 0.022) * dt; p.x += dx / d * Math.min(v, d); p.y += dy / d * Math.min(v, d); p.moving = true; p.dir = dx > 0.2 ? 1 : dx < -0.2 ? -1 : p.dir; }
         } else p.moving = false;
-        draws.push({ y: p.y + 6, f: () => drawPerson(g, p.x, p.y, p.look, { t, moving: p.moving, dir: p.dir, robot: p.robot }) });
+        draws.push({ y: p.y + 6, f: () => { drawPerson(g, p.x, p.y, p.look, { t, moving: p.moving, dir: p.dir, robot: p.robot }); if (p.m === 'stuck') drawCloud(g, p.x, p.y - 20, t); } });
         const pet = LOOK.pet[p.look.pet];
         if (pet && pet !== 'none' && !p.robot) { p.px = (p.px ?? p.x) + ((p.x - 8 * p.dir) - (p.px ?? p.x)) * Math.min(1, dt / 300); p.py = (p.py ?? p.y) + ((p.y + 4) - (p.py ?? p.y)) * Math.min(1, dt / 300); draws.push({ y: p.py + 3, f: () => drawPet(g, p.px, p.py, pet, t, p.moving) }); }
       }
     }
     draws.sort((a, b) => a.y - b.y).forEach(d => d.f());
     if (sel && !edit) { g.strokeStyle = '#ffe08a'; g.lineWidth = 1; if (sel.m === 'busy') g.strokeRect(Math.round(sel.spot.x * T) - 1.5, Math.round(sel.spot.y * T) + 0.5, sel.spot.w * T + 3, sel.spot.h * T); else g.strokeRect(Math.round(sel.x) - 7.5, Math.round(sel.y) - 13.5, 15, 23); }
+    if (letter) {
+      const k = Math.min(1, (t - letter.t0) / letter.dur), e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+      const lx = letter.a.x + (letter.b.x - letter.a.x) * e, ly = letter.a.y + (letter.b.y - letter.a.y) * e - Math.sin(k * Math.PI) * 40;
+      g.fillStyle = 'rgba(0,0,0,0.2)'; g.fillRect(lx - 3, letter.a.y + (letter.b.y - letter.a.y) * e + 2, 7, 2);
+      g.fillStyle = '#ffffff'; g.fillRect(lx - 4, ly - 3, 9, 6); g.fillStyle = '#c9c2b0'; g.fillRect(lx - 4, ly - 3, 9, 1); g.fillRect(lx - 3, ly - 2, 1, 1); g.fillRect(lx + 3, ly - 2, 1, 1); g.fillRect(lx - 2, ly - 1, 1, 1); g.fillRect(lx + 2, ly - 1, 1, 1); g.fillStyle = '#b0453a'; g.fillRect(lx, ly, 1, 1);
+      place(letterTag, lx, ly - 6); letterTag.hidden = false;
+      if (k >= 1) { letter = null; letterTag.hidden = true; nextLetter = t + 2500; }
+    } else if (queue.length && t > nextLetter) {
+      const h = queue.shift(), from = people.find(p => p.a.id === h.from), to = people.find(p => p.a.id === h.to);
+      if (from && to) { letter = { a: { ...from.door }, b: { ...to.door }, t0: t, dur: reduced ? 1 : 3600 }; letterTag.textContent = from.a.name + ' → ' + to.a.name; seen.add(h.id); try { sessionStorage.setItem('v-letters', JSON.stringify([...seen].slice(-50))); } catch (e) {} }
+    }
     if (parts.length) for (const q of parts) {
       if (set.weather === 'rain') { q.y += 0.35 * dt * q.s; q.x -= 0.05 * dt; g.fillStyle = 'rgba(180,210,240,0.6)'; g.fillRect(q.x, q.y, 1, 4); }
       else if (set.weather === 'snow') { q.y += 0.03 * dt * q.s; q.x += Math.sin(t / 900 + q.d) * 0.15; g.fillStyle = '#ffffff'; g.fillRect(q.x, q.y, q.s > 1 ? 2 : 1, q.s > 1 ? 2 : 1); }
@@ -394,7 +424,7 @@ export function mountVillage(host, agents, { onSelect, selected, reduced, decor,
     people.forEach((p, i) => {
       if (!p.fixedBubble && p.chatUntil && t > p.chatUntil) { tags[i].bub.hidden = true; p.chatUntil = 0; }
       const bx = p.m === 'busy' ? p.door.x : p.x, by = p.m === 'busy' ? p.spot.y * T + 2 : p.y - 12;
-      place(tags[i].bub, bx, by); place(tags[i].sign, (p.spot.x + p.spot.w / 2) * T, (p.spot.y + p.spot.h) * T + 2);
+      place(tags[i].bub, Math.max(44, Math.min(W - 44, bx)), by); place(tags[i].sign, (p.spot.x + p.spot.w / 2) * T, (p.spot.y + p.spot.h) * T + 2);
       const hx = p.m === 'busy' ? (p.spot.x + p.spot.w / 2) * T : p.x, hy = p.m === 'busy' ? (p.spot.y + p.spot.h / 2) * T : p.y - 3;
       place(tags[i].hit, hx, hy); tags[i].hit.classList.toggle('v-big', p.m === 'busy');
       tags[i].sign.classList.toggle('on', sel === p && !edit); tags[i].hit.hidden = !!edit;
@@ -402,7 +432,42 @@ export function mountVillage(host, agents, { onSelect, selected, reduced, decor,
     raf = requestAnimationFrame(frame);
   }
   raf = requestAnimationFrame(frame);
-  return { destroy() { alive = false; cancelAnimationFrame(raf); wrap.remove(); }, night };
+  return { destroy() { alive = false; cancelAnimationFrame(raf); zoom.destroy(); wrap.remove(); }, night };
+}
+
+/* ---------- pinch to zoom and drag the town on a phone (or ctrl + scroll on a computer) ---------- */
+function zoomControls(wrap, inner) {
+  let s = 1, tx = 0, ty = 0, moved = 0, lastDrag = 0;
+  const pts = new Map(); let pinch = null, drag = null;
+  const apply = () => {
+    const w = wrap.clientWidth, h = wrap.clientHeight;
+    s = Math.max(1, Math.min(3, s)); tx = Math.min(0, Math.max(w - w * s, tx)); ty = Math.min(0, Math.max(h - h * s, ty));
+    inner.style.setProperty('transform', s === 1 ? 'none' : `translate(${tx}px, ${ty}px) scale(${s})`);
+    inner.style.setProperty('--vz', String(s));
+    wrap.classList.toggle('zoomed', s > 1); out.disabled = s <= 1; inB.disabled = s >= 3;
+  };
+  const zoomAt = (ns, cx, cy) => { ns = Math.max(1, Math.min(3, ns)); tx = cx - (cx - tx) * ns / s; ty = cy - (cy - ty) * ns / s; s = ns; apply(); };
+  const local = e => { const b = wrap.getBoundingClientRect(); return { x: e.clientX - b.left, y: e.clientY - b.top }; };
+  const down = e => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    pts.set(e.pointerId, local(e)); moved = 0;
+    if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch = { d: Math.hypot(a.x - b.x, a.y - b.y) || 1, s, mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, tx, ty }; drag = null; }
+    else if (pts.size === 1 && s > 1) drag = { ...local(e), tx, ty };
+  };
+  const move = e => {
+    if (!pts.has(e.pointerId)) return; pts.set(e.pointerId, local(e));
+    if (pinch && pts.size >= 2) { const [a, b] = [...pts.values()]; const ns = Math.max(1, Math.min(3, pinch.s * Math.hypot(a.x - b.x, a.y - b.y) / pinch.d)); const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; tx = mid.x - (pinch.mid.x - pinch.tx) * ns / pinch.s; ty = mid.y - (pinch.mid.y - pinch.ty) * ns / pinch.s; s = ns; moved = 99; apply(); e.preventDefault(); }
+    else if (drag) { const p = local(e); tx = drag.tx + p.x - drag.x; ty = drag.ty + p.y - drag.y; moved = Math.max(moved, Math.hypot(p.x - drag.x, p.y - drag.y)); apply(); }
+  };
+  const up = e => { if (!pts.delete(e.pointerId)) return; if (pts.size < 2) pinch = null; if (!pts.size) { drag = null; if (moved > 6) lastDrag = performance.now(); } };
+  const wheel = e => { if (!e.ctrlKey) return; e.preventDefault(); const p = local(e); zoomAt(s * Math.exp(-e.deltaY * 0.01), p.x, p.y); };
+  wrap.addEventListener('pointerdown', down); window.addEventListener('pointermove', move, { passive: false }); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up); wrap.addEventListener('wheel', wheel, { passive: false });
+  const bar = document.createElement('div'); bar.className = 'v-zoom';
+  const mk = (label, txt, f) => { const b = document.createElement('button'); b.type = 'button'; b.setAttribute('aria-label', label); b.textContent = txt; b.addEventListener('click', e => { e.stopPropagation(); f(); }); bar.append(b); return b; };
+  const inB = mk('Zoom in', '+', () => zoomAt(s * 1.5, wrap.clientWidth / 2, wrap.clientHeight / 2));
+  const out = mk('Zoom out', '−', () => zoomAt(s / 1.5, wrap.clientWidth / 2, wrap.clientHeight / 2));
+  wrap.append(bar); const ro = new ResizeObserver(apply); ro.observe(wrap); apply();
+  return { dragged: () => performance.now() - lastDrag < 250, destroy() { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up); ro.disconnect(); } };
 }
 
 /* ---------- small previews for the pickers ---------- */

@@ -1,6 +1,6 @@
 // NEMORA back office. Everything is drawn with DOM nodes and textContent: no innerHTML, so nothing a visitor or a lead
 // typed can ever run as code here. The page holds no passwords, keys or tokens; the login lives in an HttpOnly cookie.
-import { mountVillage, drawRoom, RW, RH, lookOf, personIcon, itemIcon, LOOK, WALLS, ROOFS, FLOORS, PAPERS, TOWN_ITEMS, ROOM_ITEMS, STARTER_DECOR, WEATHERS, TIMES } from './village.js?v=3';
+import { mountVillage, drawRoom, RW, RH, lookOf, personIcon, itemIcon, LOOK, WALLS, ROOFS, FLOORS, PAPERS, TOWN_ITEMS, ROOM_ITEMS, STARTER_DECOR, WEATHERS, TIMES } from './village.js?v=4';
 const cap = v => String(v).charAt(0).toUpperCase() + String(v).slice(1);
 const when2 = iso => new Date(iso).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 const $ = s => document.querySelector(s);
@@ -644,11 +644,13 @@ function resultsCard(p, id) {
 let villageTown = 'NEMORA', villageSel = '', villageApp = null, villageTab = 'talk', villageEdit = null, roomEdit = null, roomRaf = 0;
 async function showVillage(pick) {
   const d = await api('admin/agents');
+  const town = d.town || { board: {}, approvals: {}, stuck: {}, handoffs: [], lyn: {} };
+  for (const a of d.agents) { a.stuck = (town.stuck || {})[a.id] || ''; a.approvals = (town.approvals || {})[a.id] || []; }
   if (pick) villageSel = pick;
   const towns = [...new Set(['NEMORA', ...d.agents.map(a => a.business || 'NEMORA')])];
   if (!towns.includes(villageTown)) villageTown = 'NEMORA';
   const here = d.agents.filter(a => (a.business || 'NEMORA') === villageTown);
-  const { decor } = await api('admin/village?b=' + encodeURIComponent(villageTown));
+  const { decor, share } = await api('admin/village?b=' + encodeURIComponent(villageTown));
   decor.houses = decor.houses || {}; decor.rooms = decor.rooms || {};
   let saveT = 0;
   const saveDecor = () => { clearTimeout(saveT); saveT = setTimeout(() => act(() => api('admin/village', { method: 'PUT', body: { business: villageTown, decor } })), 600); };
@@ -656,7 +658,7 @@ async function showVillage(pick) {
   const panel = h('div', { class: 'village-panel' });
   const stage = h('div', { class: 'village-stage' });
   const tools = h('div', { class: 'village-tools', hidden: !villageEdit });
-  const mount = () => { if (villageApp) villageApp.destroy(); villageApp = mountVillage(stage, here, { onSelect: a => { villageSel = a.id; showPanel(a); }, selected: villageSel, reduced: matchMedia('(prefers-reduced-motion: reduce)').matches, decor, edit: villageEdit }); };
+  const mount = () => { if (villageApp) villageApp.destroy(); villageApp = mountVillage(stage, here, { onSelect: a => { villageSel = a.id; showPanel(a); }, onApprove: a => { villageSel = a.id; villageTab = 'approve'; showPanel(a); panel.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, handoffs: town.handoffs, selected: villageSel, reduced: matchMedia('(prefers-reduced-motion: reduce)').matches, decor, edit: villageEdit }); };
 
   // decorating the town
   const drawTools = () => {
@@ -692,16 +694,34 @@ async function showVillage(pick) {
     cancelAnimationFrame(roomRaf); roomEdit = null;
     panel.replaceChildren();
     if (!a) { panel.append(h('p', { class: 'small muted' }, 'Tap anyone in the village to look inside their house, dress them up or see what they do.')); return; }
-    const opts = (a.kind === 'system' ? [] : [['talk', 'Talk']]).concat([['house', 'Their house'], ['look', 'Their look'], ['personality', 'Personality'], ['about', 'What they do']]);
+    const opts = ((a.approvals || []).length ? [['approve', 'Needs your OK']] : []).concat(a.kind === 'system' ? [] : [['talk', 'Talk']]).concat([['house', 'Their house'], ['look', 'Their look'], ['personality', 'Personality'], ['about', 'What they do']]);
     if (!opts.some(([k]) => k === villageTab)) villageTab = opts[0][0];
     const tabs = chipsRow(opts, villageTab, k => { villageTab = k; showPanel(a); });
     const body = h('div', { class: 'card village-card' });
     panel.append(h('div', { class: 'village-who' }, personIcon(lookOf(a), 3), h('div', {}, h('h2', {}, a.name), h('span', { class: 'small muted' }, a.role || ''))), tabs, body);
-    if (villageTab === 'talk') talkTab(a, body);
+    if (villageTab === 'approve') approveTab(a, body);
+    else if (villageTab === 'talk') talkTab(a, body);
     else if (villageTab === 'house') houseTab(a, body);
     else if (villageTab === 'look') lookTab(a, body);
     else if (villageTab === 'personality') personaTab(a, body);
     else aboutTab(a, body);
+  };
+  const approveTab = (a, body) => {
+    body.replaceChildren(...a.approvals.map(it => {
+      const media = h('div', { class: 'approve-media' }, it.media.map(u => /\.mp4($|\?)/i.test(u) ? h('video', { src: u, controls: true, playsinline: true, preload: 'metadata' }) : h('img', { src: u, alt: 'Slide for this post', loading: 'lazy' })));
+      const note = h('textarea', { rows: 3, maxlength: 1000, placeholder: 'What should they change?', 'aria-label': 'Note for ' + a.name });
+      const back = h('div', { class: 'confirm', hidden: true }, 'Send it back with a note:', note, h('div', { class: 'actions' },
+        h('button', { class: 'btn btn-danger', onclick: async () => { if (await act(() => api('admin/social/' + it.id + '/reject', { method: 'POST', body: { feedback: note.value } }), 'Sent back to ' + a.name)) showVillage(a.id); } }, 'Send back'),
+        h('button', { class: 'btn', onclick: () => back.hidden = true }, 'Cancel')));
+      return h('div', { class: 'approve-item' },
+        h('p', { class: 'small muted' }, cap(it.kind === 'reel' ? 'video' : it.kind) + (it.scheduled_at ? ', goes out ' + at(it.scheduled_at) + ' once you OK it' : '')),
+        it.media.length ? media : null, h('div', { class: 'approve-cap' }, it.caption || '(no caption)'),
+        h('div', { class: 'actions' },
+          h('button', { class: 'btn btn-gold', onclick: async () => { if (await act(() => api('admin/social/' + it.id + '/approve', { method: 'POST' }), 'Approved. It goes out ' + (it.scheduled_at && new Date(it.scheduled_at) > new Date() ? at(it.scheduled_at) : 'within 15 minutes'))) { villageTab = 'talk'; showVillage(a.id); } } }, 'Approve'),
+          h('button', { class: 'btn', onclick: () => { back.hidden = false; note.focus(); } }, 'Send back'),
+          h('a', { class: 'btn btn-ghost', href: '#post/' + encodeURIComponent(it.id) }, 'Edit first')),
+        back);
+    }));
   };
   const houseTab = (a, body) => {
     cancelAnimationFrame(roomRaf);
@@ -755,13 +775,13 @@ async function showVillage(pick) {
     const when = a.health === 'hiring' ? 'once the Boss sets them up' : !a.enabled ? 'when you switch them back on' : a.next ? 'on their next run, ' + at(a.next) : 'on their next run';
     const load = async () => {
       const { messages } = await api('admin/agents/' + a.id + '/messages');
-      thread.replaceChildren(...(messages.length ? messages.map(m => h('div', { class: 'msg-b ' + (m.dir === 'in' ? 'me' : 'them') }, h('span', { class: 'who' }, m.dir === 'in' ? 'You' + (m.kind === 'task' ? ' (a job)' : '') : a.name), h('p', {}, m.text), h('span', { class: 'when' }, when2(m.created) + (m.dir === 'in' && m.status === 'new' ? ', waiting to be read' : '')))) : [h('p', { class: 'small muted' }, 'No messages yet. Say hello.')]));
+      thread.replaceChildren(...(messages.length ? messages.map(m => h('div', { class: 'msg-b ' + (m.dir === 'in' ? 'me' : 'them') + (m.kind === 'quick' ? ' quick' : '') }, h('span', { class: 'who' }, m.dir === 'in' ? 'You' + (m.kind === 'task' ? ' (a job)' : '') : a.name + (m.kind === 'quick' ? ' (instant reply)' : m.kind === 'brief' ? ' (morning brief)' : '')), h('p', {}, m.text), h('span', { class: 'when' }, when2(m.created) + (m.dir === 'in' && m.status === 'new' ? ', waiting to be read' : '')))) : [h('p', { class: 'small muted' }, 'No messages yet. Say hello.')]));
       thread.scrollTop = thread.scrollHeight;
       a.unread_out = 0;
     };
-    const send = h('button', { class: 'btn btn-gold', onclick: async () => { if (!box.value.trim()) return; send.disabled = true; const r = await act(() => api('admin/agents/' + a.id + '/messages', { method: 'POST', body: { text: box.value, kind: job.checked ? 'task' : 'chat' } }), 'Sent. ' + a.name + ' will reply ' + when.replace('on their next run, ', 'at ')); send.disabled = false; if (r) { box.value = ''; job.checked = false; load(); } } }, 'Send');
+    const send = h('button', { class: 'btn btn-gold', onclick: async () => { if (!box.value.trim()) return; send.disabled = true; send.textContent = d.ai ? a.name + ' is typing…' : 'Sending…'; const r = await act(() => api('admin/agents/' + a.id + '/messages', { method: 'POST', body: { text: box.value, kind: job.checked ? 'task' : 'chat' } })); send.disabled = false; send.textContent = 'Send'; if (r) { if (!r.quick) toast('Sent. ' + a.name + ' will reply ' + when.replace('on their next run, ', 'at ')); box.value = ''; job.checked = false; load(); } } }, 'Send');
     body.replaceChildren(thread, box, h('div', { class: 'talk-row' }, h('label', { class: 'check' }, job, ' This is a job for ' + (a.id === 'lyn' ? 'her' : 'them')), send),
-      h('p', { class: 'small muted' }, a.name + ' reads this and replies ' + when + '. ' + (a.id === 'lyn' ? 'Lyn checks every 2 hours from 8am to 10pm, and passes jobs to the right agent.' : a.id === 'boss' ? 'The Boss reads messages every morning at 7:52.' : 'For anything quicker, message Lyn.')));
+      h('p', { class: 'small muted' }, (d.ai ? a.name + ' answers straight away, then does the actual work and sends a proper reply ' + when + '. ' : a.name + ' reads this and replies ' + when + '. ') + (a.id === 'lyn' ? 'Lyn checks every 2 hours from 8am to 10pm, and passes jobs to the right agent.' : a.id === 'boss' ? 'The Boss reads messages every morning at 7:52.' : 'For anything quicker, message Lyn.')));
     await load();
   };
   const personaTab = (a, body) => {
@@ -796,14 +816,45 @@ async function showVillage(pick) {
     onSave: async v => { const r = await api('admin/agents', { method: 'POST', body: { ...v, look } }); toast(r.agent.name + ' is waiting at the gate'); villageTown = r.agent.business; villageSel = r.agent.id; route(); }, onCancel: () => { f.el.hidden = true; } });
   f.el.hidden = true;
   const trouble = here.filter(a => ['missed', 'failed', 'attention'].includes(a.health)).length;
+  const okCount = here.reduce((n, a) => n + a.approvals.length, 0), stuckN = here.filter(a => a.stuck).length;
+  // Lyn's morning card and the noticeboard (NEMORA's own town only)
+  const lynA = here.find(a => a.id === 'lyn'), lyn = town.lyn || {};
+  const needs = [okCount ? okCount + (okCount === 1 ? ' thing needs' : ' things need') + ' your OK (tap the yellow sign)' : '', ...here.filter(a => a.stuck).map(a => a.name + ': ' + a.stuck.toLowerCase()), ...here.filter(a => ['missed', 'failed', 'attention'].includes(a.health)).map(a => a.name + ' needs a look')].filter(Boolean);
+  const hr = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hour: 'numeric', hourCycle: 'h23' }).format(new Date()));
+  const lynCard = villageTown === 'NEMORA' && lynA ? h('section', { class: 'card lyn-card', 'aria-label': 'From Lyn' }, personIcon(lookOf(lynA), 3), h('div', {},
+    h('h2', {}, (hr < 12 ? 'Good morning' : hr < 18 ? 'Good afternoon' : 'Good evening') + ', Charlie'),
+    lyn.brief ? h('p', { class: 'brief' }, lyn.brief.text) : h('p', { class: 'small muted' }, lynA.enabled ? 'Lyn writes your brief on her first run of the day, at 8:07am.' : 'Lyn is paused, so no brief today.'),
+    lyn.due && lyn.due.length ? h('ul', {}, lyn.due.map(x => h('li', { class: x.late ? 'late' : '' }, x.text + (x.late ? ' (overdue)' : '')))) : null,
+    needs.length ? h('ul', {}, needs.slice(0, 5).map(t => h('li', {}, t))) : h('p', { class: 'small muted' }, 'Nothing in the village needs you right now.'),
+    h('div', { class: 'actions' }, h('button', { class: 'btn btn-sm', onclick: () => { villageSel = 'lyn'; villageTab = 'talk'; showPanel(lynA); panel.scrollIntoView({ behavior: 'smooth', block: 'start' }); } }, 'Talk to Lyn')))) : null;
+  const b = town.board || {}, num = v => v == null ? '–' : String(v);
+  const board = villageTown === 'NEMORA' ? h('section', { class: 'noticeboard', 'aria-label': 'Town noticeboard' }, h('h2', {}, 'Town noticeboard'), h('div', { class: 'notes' },
+    h('div', { class: 'note' + (b.sent_week === 0 ? ' bad' : '') }, h('b', {}, num(b.sent_today)), h('span', {}, 'emails sent today (' + num(b.sent_week) + ' this week)')),
+    h('div', { class: 'note' }, h('b', {}, num(b.interested)), h('span', {}, 'interested prospects')),
+    h('div', { class: 'note' }, h('b', {}, num(b.posts_week)), h('span', {}, 'posts live this week')),
+    h('div', { class: 'note' + (b.sites_down ? ' bad' : '') }, h('b', {}, b.sites_live == null ? '–' : (b.sites_live - (b.sites_down || 0)) + '/' + b.sites_live), h('span', {}, b.sites_down ? b.sites_down + ' website' + (b.sites_down === 1 ? '' : 's') + ' down' : 'websites up')),
+    h('div', { class: 'note' }, h('b', {}, b.next_post ? new Date(b.next_post).toLocaleString('en-GB', { weekday: 'short', timeZone: 'Europe/London' }) : '–'), h('span', {}, b.next_post ? 'next post, ' + new Date(b.next_post).toLocaleString('en-GB', { hour: 'numeric', minute: '2-digit', timeZone: 'Europe/London' }) : 'no post planned')))) : null;
+  // a view-only link to this village (for clients later); it shows names, looks and who's working, never logs or messages
+  let shareUrl = share ? location.origin + share : '';
+  const shareBox = h('details', { class: 'card share' }, h('summary', {}, 'Share a view-only link'));
+  const drawShare = () => {
+    const copy = h('button', { class: 'btn btn-sm', onclick: async () => { try { await navigator.clipboard.writeText(shareUrl); toast('Link copied'); } catch (e) { toast('Press and hold the link to copy it'); } } }, 'Copy');
+    const setShare = async on => { const r = await act(() => api('admin/village', { method: 'POST', body: { business: villageTown, share: on } }), on ? 'New link made' : 'Link turned off'); if (r) { shareUrl = r.share ? location.origin + r.share : ''; drawShare(); } };
+    shareBox.replaceChildren(shareBox.firstChild,
+      h('p', { class: 'small muted' }, 'Anyone with the link can watch this village: names, looks, who\'s working or asleep, and the decorations. They can\'t see messages, what agents did, numbers or anything in your admin, and can\'t change anything.'),
+      shareUrl ? h('div', { class: 'share-row' }, h('code', {}, shareUrl), copy, h('button', { class: 'btn btn-sm', onclick: () => setShare(true) }, 'New link'), h('button', { class: 'btn btn-sm btn-ghost', onclick: () => setShare(false) }, 'Turn off'))
+        : h('div', { class: 'actions' }, h('button', { class: 'btn btn-sm', onclick: () => setShare(true) }, 'Make a link for ' + villageTown)));
+  };
+  drawShare();
   render(
-    pageHead('Village', villageTown === 'NEMORA' ? 'Your AI village' : villageTown + ' village', 'Everyone who works for you, living in one little town. When an agent is working, their roof comes off so you can watch them at their desk. Paused agents are asleep, and anyone who needs you has a red "!".', [h('button', { class: 'btn btn-gold', onclick: () => { f.el.hidden = false; f.els.name.focus(); } }, 'Hire an agent'), editBtn]),
+    pageHead('Village', villageTown === 'NEMORA' ? 'Your AI village' : villageTown + ' village', 'Everyone who works for you, living in one little town. When an agent is working, their roof comes off so you can watch them at their desk. A yellow sign means something needs your OK, a grey cloud means they\'re stuck, and letters fly between houses when they pass each other jobs.', [h('button', { class: 'btn btn-gold', onclick: () => { f.el.hidden = false; f.els.name.focus(); } }, 'Hire an agent'), editBtn]),
     towns.length > 1 ? chipsRow(towns.map(t => [t, t, d.agents.filter(a => (a.business || 'NEMORA') === t).length]), villageTown, t => { villageTown = t; villageSel = ''; villageEdit = null; showVillage(); }) : null,
-    f.el, tools, stage,
+    lynCard, board, f.el, tools, stage,
     h('div', { class: 'village-legend small muted' },
-      h('span', {}, h('i', { class: 'lg busy' }), 'Working (roof off)'), h('span', {}, h('i', { class: 'lg asleep' }), 'Paused (asleep)'), h('span', {}, h('i', { class: 'lg trouble' }), 'Needs you'), h('span', {}, h('i', { class: 'lg hiring' }), 'Waiting to be hired'),
-      trouble ? h('strong', {}, plural(trouble, 'agent') + (trouble === 1 ? ' needs you' : ' need you')) : null),
-    panel);
+      h('span', {}, h('i', { class: 'lg busy' }), 'Working (roof off)'), h('span', {}, h('i', { class: 'lg asleep' }), 'Paused (asleep)'), h('span', {}, h('i', { class: 'lg trouble' }), 'Needs you'), h('span', {}, h('i', { class: 'lg hiring' }), 'Waiting to be hired'), h('span', {}, h('i', { class: 'lg stuck' }), 'Stuck (on, but getting nowhere)'), h('span', {}, h('i', { class: 'lg ok' }), 'Needs your OK'),
+      trouble ? h('strong', {}, plural(trouble, 'agent') + (trouble === 1 ? ' needs you' : ' need you')) : null,
+      h('span', {}, 'Pinch or use + and − to zoom in.')),
+    panel, shareBox);
   mount();
   showPanel(here.find(a => a.id === villageSel) || null);
 }

@@ -10,7 +10,7 @@ const KV = {
   async delete(k) { store.delete(k); },
   async list({ prefix = '' } = {}) { return { keys: [...store.entries()].filter(([k, e]) => k.startsWith(prefix) && !(e.exp && e.exp < Date.now())).sort().map(([k, e]) => ({ name: k, metadata: e.m })), list_complete: true }; }
 };
-const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.ico': 'image/x-icon', '.txt': 'text/plain' };
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.ico': 'image/x-icon', '.txt': 'text/plain', '.webmanifest': 'application/manifest+json' };
 const ASSETS = { async fetch(req) {
   let p = new URL(req.url).pathname; if (p.endsWith('/')) p += 'index.html'; else if (!path.extname(p)) p += '.html';
   const f = path.join(ROOT, 'public', p); if (!f.startsWith(path.join(ROOT, 'public')) || !fs.existsSync(f)) return new Response('Not found', { status: 404 });
@@ -23,6 +23,8 @@ const stmt = (q, a = []) => ({ q, bind: (...b) => stmt(q, b), async first() { re
 const DB = { prepare: q => stmt(q), async batch(list) { const out = []; for (const x of list) out.push(/^\s*(SELECT|WITH)/i.test(x.q) ? await x.all() : (await x.run(), { results: [] })); return out; } };
 globalThis.__testDB = sql;
 const env = { KV, ASSETS, DB, META_PAGE_TOKEN: process.env.META_PAGE_TOKEN ?? 'test-token', META_API_BASE: 'http://localhost:8802', META_APP_ID: process.env.META_APP_ID ?? '', META_APP_SECRET: process.env.META_APP_SECRET ?? '', META_LOGIN_CONFIG_ID: process.env.META_LOGIN_CONFIG_ID ?? '', MEDIA_ORIGIN: 'https://nemora.uk/social/', SETUP_CODE: process.env.SETUP_CODE ?? 'test setup phrase', SITE_ORIGINS: process.env.SITE_ORIGINS || 'https://nemora.uk,http://localhost:8795' };
+// stand-in for Cloudflare's AI binding: echoes a short in-character reply and records what it was asked
+if (process.env.MOCK_AI) env.AI = { async run(model, { messages }) { globalThis.__aiCalls = (globalThis.__aiCalls || []).concat([{ model, messages }]); if (process.env.MOCK_AI === 'fail') throw new Error('allowance used up'); return { response: 'On it, Charlie. I\'ll sort that on my next run.' }; } };
 const PORT = +process.env.PORT || 8801;
 http.createServer(async (req, res) => {
   const chunks = []; for await (const c of req) chunks.push(c);
@@ -32,6 +34,7 @@ http.createServer(async (req, res) => {
   Object.defineProperty(r, 'cf', { value: { country: req.headers['x-test-country'] || 'GB' } });
   if (req.url === '/__insights') { const { refreshInsights } = await import(path.join(ROOT, 'src/social.js')); res.end(JSON.stringify(await refreshInsights(env))); return; }
   if (req.url === '/__cron') { const { publishDue } = await import(path.join(ROOT, 'src/social.js')); res.end(JSON.stringify(await publishDue(env))); return; }
+  if (req.url === '/__ai') { res.end(JSON.stringify(globalThis.__aiCalls || [])); return; }
   if (req.url === '/__sql') { try { sql.exec(Buffer.concat(chunks).toString()); res.end('ok'); } catch (e) { res.statusCode = 500; res.end(String(e)); } return; }
   if (req.url === '/__seed' ) { const now = Date.now(); for (let i = 0; i < 400; i++) { const t = now - Math.floor(Math.random() * 40) * 86400000; sql.prepare("INSERT INTO hits (ts, day, path, ref, device, country, visitor, kind) VALUES (?,?,?,?,?,?,?,?)").run(t, new Date(t).toISOString().slice(0, 10), ['/', '/services.html', '/contact.html', '/work.html', '/guides/how-much-does-a-website-cost.html'][i % 5], ['', 'google.com', 'facebook.com', '', 'bing.com'][i % 5 === 1 ? 1 : i % 7 === 0 ? 2 : i % 11 === 0 ? 4 : 0], ['Phone', 'Phone', 'Desktop', 'Tablet'][i % 4], ['GB', 'GB', 'GB', 'US', 'IE'][i % 5], 'v' + (i % 90), i % 37 === 0 ? 'enquiry' : 'view'); } res.end('seeded'); return; }
   const out = await worker.fetch(r, env, { waitUntil() {} });

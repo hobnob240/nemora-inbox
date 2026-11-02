@@ -1,0 +1,10 @@
+/* the view-only village link */
+body.town-page{background:#101219;color:#ece6d8;margin:0;font:15px/1.5 Inter,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif}
+.town-main{max-width:960px;margin:0 auto;padding-block:20px 32px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:14px}
+.town-head h1{margin:0;font-size:clamp(1.4rem,4vw,2rem);text-wrap:balance}
+.town-head p{margin:4px 0 0}
+.town-card{display:flex;gap:12px;align-items:center}
+.town-card h2{margin:0;font-size:1.05rem}
+.town-card p{margin:2px 0 0}
+.town-foot a{color:#e8cf98}
+html{background:#101219}
