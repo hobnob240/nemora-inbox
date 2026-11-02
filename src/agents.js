@@ -43,7 +43,7 @@ const TEAM = [
   { id: 'guides', name: 'Guides writer', role: 'Writes guides for nemora.uk', kind: 'claude', cron: '13 10 1,15 * *', schedule_text: 'The 1st and 15th of each month at 10:13am', trigger_id: 'trig_0142NdQ8BK8APcu6By9sXhKn', sort: 5,
     job: 'Researches and publishes one honest, useful guide for small business owners on nemora.uk/guides, twice a month, with every fact sourced.',
     duties: ['Picks a useful topic nobody has covered on the site', 'Researches it from official and reliable sources', 'Writes and publishes it on nemora.uk/guides', 'Never touches any other page'] },
-  { id: 'lyn', name: 'Lyn', role: 'Your personal assistant', kind: 'claude', cron: '7 8-22/2 * * *', schedule_text: 'Every 2 hours, 8am to 10pm', trigger_id: '', reports_to: '', sort: 1,
+  { id: 'lyn', name: 'Lyn', role: 'Your personal assistant', kind: 'claude', cron: '7 8-22/2 * * *', schedule_text: 'Every 2 hours, 8am to 10pm', trigger_id: 'trig_01Xx9zdCFghUN6TgvAzigU2m', reports_to: '', sort: 1,
     job: "Your Jarvis: answers your messages in the village, keeps your to-do list and reminders, checks your NEMORA inbox and your diary, looks things up, drafts emails for you to send, and passes jobs to the right agent.",
     duties: ['Reads and answers your messages every 2 hours', 'Keeps your to-do list and reminders', 'Drafts emails and messages for you to send', 'Hands jobs to the right agent'] },
   { id: 'autopilot', name: 'Autopilot', role: 'Always on', kind: 'system', cron: '*/15 * * * *', schedule_text: 'Every 15 minutes', trigger_id: '', sort: 6,
@@ -76,6 +76,7 @@ export async function ensureAgents(env) {
     if (!cols.includes(c)) await env.DB.prepare(`ALTER TABLE agents ADD COLUMN ${c} ${def}`).run();
   const st = env.DB.prepare('INSERT OR IGNORE INTO agents (id, name, role, job, duties, kind, cron, schedule_text, trigger_id, reports_to, sort, updated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
   await env.DB.batch(TEAM.map(a => st.bind(a.id, a.name, a.role, a.job, JSON.stringify(a.duties), a.kind, a.cron, a.schedule_text, a.trigger_id, a.reports_to ?? 'boss', a.sort, now())));
+  await env.DB.prepare("UPDATE agents SET trigger_id = 'trig_01Xx9zdCFghUN6TgvAzigU2m' WHERE id = 'lyn' AND trigger_id = ''").run();
   await env.DB.prepare("UPDATE agents SET seeded = 1 WHERE id IN ('boss','outreach','replies','social','care','guides','autopilot','lyn')").run();
   for (const [id, pe] of Object.entries(PERSONAS)) await env.DB.prepare("UPDATE agents SET personality = ? WHERE id = ? AND personality = ''").bind(JSON.stringify(pe), id).run();
   ready = true;
