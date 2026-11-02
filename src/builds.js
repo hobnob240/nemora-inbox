@@ -15,8 +15,21 @@ const hex = n => [...crypto.getRandomValues(new Uint8Array(n))].map(b => b.toStr
 const reply = (data, status = 200, headers = {}) => new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', ...headers } });
 const clean = (v, max) => String(v == null ? '' : v).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').trim().slice(0, max);
 
+import { IMPORTS } from './imports.js';
 let ready = false;
-async function ensure(env) { if (ready) return; for (const s of BUILDS_SCHEMA) await env.DB.prepare(s).run(); ready = true; }
+async function ensure(env) {
+  if (ready) return;
+  for (const s of BUILDS_SCHEMA) await env.DB.prepare(s).run();
+  // bring in existing client sites once (INSERT OR IGNORE: never overwrites a build that's already there)
+  for (const im of IMPORTS) {
+    if (await env.KV.get('bimport:' + im.id) || await env.DB.prepare('SELECT id FROM builds WHERE id = ?').bind(im.id).first()) continue;
+    const t = now(), html = cleanHtml(im.html), css = cleanCss(im.css);
+    await env.DB.prepare('INSERT OR IGNORE INTO builds (id, title, project_id, token, rev, html, css, data, created, updated) VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?)').bind(im.id, im.title, '', hex(16), html, css, '', t, t).run();
+    await env.DB.prepare('INSERT INTO build_versions (build_id, rev, html, css, data, note, saved) VALUES (?, 1, ?, ?, ?, ?, ?)').bind(im.id, html, css, '', 'Imported from the live site', t).run();
+    await env.KV.put('bimport:' + im.id, t);
+  }
+  ready = true;
+}
 
 // Nothing that runs: no scripts, no inline handlers, no javascript: links, no embedded frames or objects.
 export function cleanHtml(html) {
