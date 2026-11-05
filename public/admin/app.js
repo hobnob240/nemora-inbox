@@ -1,6 +1,6 @@
 // NEMORA back office. Everything is drawn with DOM nodes and textContent: no innerHTML, so nothing a visitor or a lead
 // typed can ever run as code here. The page holds no passwords, keys or tokens; the login lives in an HttpOnly cookie.
-import { mountVillage, drawRoom, RW, RH, lookOf, personIcon, itemIcon, LOOK, WALLS, ROOFS, FLOORS, PAPERS, TOWN_ITEMS, ROOM_ITEMS, STARTER_DECOR, WEATHERS, TIMES } from './village.js?v=4';
+import { mountVillage, drawRoom, RW, RH, lookOf, personIcon, itemIcon, LOOK, WALLS, ROOFS, FLOORS, PAPERS, TOWN_ITEMS, ROOM_ITEMS, STARTER_DECOR, WEATHERS, TIMES } from './village.js?v=5';
 const cap = v => String(v).charAt(0).toUpperCase() + String(v).slice(1);
 const when2 = iso => new Date(iso).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 const $ = s => document.querySelector(s);
@@ -64,7 +64,7 @@ async function api(path, opts = {}) {
   const r = await fetch('/api/' + path, { credentials: 'same-origin', method: opts.method || 'GET', headers: opts.body ? { 'Content-Type': 'application/json' } : {}, body: opts.body ? JSON.stringify(opts.body) : undefined });
   if (r.status === 401) { location.href = '/admin/'; throw new Error('logged out'); }
   let d = {}; try { d = await r.json(); } catch (e) {}
-  if (!r.ok) throw new Error(d.error || 'Something went wrong. Please try again.');
+  if (!r.ok) { const err = new Error(d.error || 'Something went wrong. Please try again.'); err.status = r.status; err.data = d; throw err; }
   return d;
 }
 async function act(fn, ok) { try { const r = await fn(); if (ok) toast(ok); return r || true; } catch (e) { if (e.message !== 'logged out') toast(e.message, true); return null; } }
@@ -160,7 +160,7 @@ const NAV = [['home', 'Home'], ['inbox', 'Inbox'], ['leads', 'Leads'], ['sites',
 const SIDE = [['home', 'Home'], ['village', 'Village'], ['agents', 'Agents'], ['inbox', 'Inbox'], ['leads', 'Leads'], ['social', 'Social'], ['sites', 'Sites'], ['builds', 'Builder'], ['work', 'Work'], ['money', 'Money']];
 const NAV_MORE = [['visitors', 'Visitors'], ['settings', 'Settings']];
 const MENU = [['village', 'Village'], ['agents', 'Agents'], ['builds', 'Builder'], ['social', 'Social'], ['visitors', 'Visitors'], ['settings', 'Settings']];
-const SECTION = { village: 'village', builds: 'builds', agents: 'agents', agent: 'agents', social: 'social', post: 'social', sites: 'sites', site: 'sites', inbox: 'inbox', leads: 'leads', lead: 'leads', work: 'work', project: 'work', client: 'work', clients: 'work', money: 'money', invoice: 'money', visitors: 'visitors', settings: 'settings', activity: 'settings', home: 'home' };
+const SECTION = { village: 'village', play: 'village', builds: 'builds', agents: 'agents', agent: 'agents', social: 'social', post: 'social', sites: 'sites', site: 'sites', inbox: 'inbox', leads: 'leads', lead: 'leads', work: 'work', project: 'work', client: 'work', clients: 'work', money: 'money', invoice: 'money', visitors: 'visitors', settings: 'settings', activity: 'settings', home: 'home' };
 const TITLES = { village: 'Village', builds: 'Builder', agents: 'Agents', social: 'Social', sites: 'Sites', home: 'Home', inbox: 'Inbox', leads: 'Leads', work: 'Work', money: 'Money', visitors: 'Visitors', settings: 'Settings' };
 let me = { username: '', role: 'owner', name: '', unread: 0 };
 function shell() {
@@ -195,7 +195,7 @@ async function route() {
     home: showHome, inbox: id ? () => showMessage(id) : showInbox, leads: showLeads, lead: () => showLead(id),
     work: () => showWork('projects'), clients: () => showWork('clients'),
     project: () => id === 'new' ? editProject(null, extra) : showProject(id), client: () => id === 'new' ? editClient(null) : showClient(id),
-    builds: showBuilds, village: () => showVillage(id),
+    builds: showBuilds, village: () => showVillage(id), play: () => showVillage(null, true),
     agents: showAgents, agent: () => showAgent(id),
     social: showSocial, post: () => showPost(id),
     sites: showSites, site: () => id === 'new' ? editSite(null, extra) : showSite(id),
@@ -642,7 +642,7 @@ function resultsCard(p, id) {
 }
 /* ================= village ================= */
 let villageTown = 'NEMORA', villageSel = '', villageApp = null, villageTab = 'talk', villageEdit = null, roomEdit = null, roomRaf = 0;
-async function showVillage(pick) {
+async function showVillage(pick, autoplay) {
   const d = await api('admin/agents');
   const town = d.town || { board: {}, approvals: {}, stuck: {}, handoffs: [], lyn: {} };
   for (const a of d.agents) { a.stuck = (town.stuck || {})[a.id] || ''; a.approvals = (town.approvals || {})[a.id] || []; }
@@ -856,10 +856,20 @@ async function showVillage(pick) {
         : h('div', { class: 'actions' }, h('button', { class: 'btn btn-sm', onclick: () => setShare(true) }, 'Make a link for ' + villageTown)));
   };
   drawShare();
+  // the playable version: walk round this village as yourself (opens full screen; the page underneath stays as it is)
+  const play = async btn => {
+    if (btn) btn.disabled = true;
+    try {
+      const { startGame } = await import('./game.js?v=1');
+      await startGame({ api, agents: here, decor, town, onApprove: a => { villageSel = a.id; villageTab = 'approve'; if (location.hash !== '#village') location.hash = 'village'; else showVillage(a.id); }, onExit: () => { if (location.hash === '#play') location.hash = 'village'; else showVillage(); } });
+    } catch (e) { toast(e.message || 'The game couldn\'t start.', true); }
+    if (btn) btn.disabled = false;
+  };
+  const playCard = villageTown === 'NEMORA' ? h('section', { class: 'card play-card' }, h('div', {}, h('h2', {}, 'Play the village'), h('p', { class: 'small muted' }, 'Walk round as yourself: talk to your agents and give them jobs, grow crops, fish, mine, and spend the coins your real work earns.')), h('button', { class: 'btn btn-gold', onclick: e => play(e.currentTarget) }, 'Play')) : null;
   render(
     pageHead('Village', villageTown === 'NEMORA' ? 'Your AI village' : villageTown + ' village', 'Everyone who works for you, living in one little town. When an agent is working, their roof comes off so you can watch them at their desk. A yellow sign means something needs your OK, a grey cloud means they\'re stuck, and letters fly between houses when they pass each other jobs.', [h('button', { class: 'btn btn-gold', onclick: () => { f.el.hidden = false; f.els.name.focus(); } }, 'Hire an agent'), editBtn]),
     towns.length > 1 ? chipsRow(towns.map(t => [t, t, d.agents.filter(a => (a.business || 'NEMORA') === t).length]), villageTown, t => { villageTown = t; villageSel = ''; villageEdit = null; showVillage(); }) : null,
-    lynCard, board, f.el, tools, stage,
+    playCard, lynCard, board, f.el, tools, stage,
     h('div', { class: 'village-legend small muted' },
       h('span', {}, h('i', { class: 'lg busy' }), 'Working (roof off)'), h('span', {}, h('i', { class: 'lg asleep' }), 'Paused (asleep)'), h('span', {}, h('i', { class: 'lg trouble' }), 'Needs you'), h('span', {}, h('i', { class: 'lg hiring' }), 'Waiting to be hired'), h('span', {}, h('i', { class: 'lg stuck' }), 'Stuck (on, but getting nowhere)'), h('span', {}, h('i', { class: 'lg ok' }), 'Needs your OK'),
       trouble ? h('strong', {}, plural(trouble, 'agent') + (trouble === 1 ? ' needs you' : ' need you')) : null,
@@ -867,6 +877,7 @@ async function showVillage(pick) {
     panel, shareBox);
   mount();
   showPanel(here.find(a => a.id === villageSel) || null);
+  if (autoplay && villageTown === 'NEMORA') play();
 }
 /* ================= site builder ================= */
 async function showBuilds() {

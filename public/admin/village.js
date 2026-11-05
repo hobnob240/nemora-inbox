@@ -479,3 +479,6 @@ export function personIcon(look, scale = 4) {
   const c = document.createElement('canvas'); c.width = 22 * scale; c.height = 24 * scale; const g = c.getContext('2d'); g.imageSmoothingEnabled = false;
   g.scale(scale, scale); drawPerson(g, 12, 14, look, {}); const pet = LOOK.pet[look.pet]; if (pet && pet !== 'none') drawPet(g, 4, 19, pet, 0, false); c.setAttribute('aria-hidden', 'true'); return c;
 }
+
+// shared with the playable version of the village (game.js)
+export { W, H, T, PAL, SPOTS, PLOTS, GATE, SQUARE, rng, drawGround, drawBuilding, drawCloud, bubbleText };

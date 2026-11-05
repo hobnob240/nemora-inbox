@@ -477,3 +477,7 @@ button.v-bubble{pointer-events:auto;border:0;cursor:pointer;touch-action:manipul
 .inbox-reply{margin:0;white-space:pre-line;overflow-wrap:anywhere;border-left:3px solid #d4b06a;padding-left:10px}
 .inbox-reply .who{display:block;font-size:.75rem;font-weight:700;color:var(--muted,#7a756c)}
 .inbox-item textarea{width:100%;min-height:72px;font-size:16px}
+.play-card{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;background:linear-gradient(135deg,#2b3a24,#3b2d1c);color:#fbf3df;border:0}
+.play-card h2{margin:0 0 2px;color:#fbf3df}
+.play-card .muted{color:#d9ccb0}
+.play-card .btn{min-width:120px;font-size:1.05rem}
