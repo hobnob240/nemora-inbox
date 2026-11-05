@@ -18,7 +18,7 @@
 // itself is never stored and the hash can't be linked across days or back to a person. Rows are kept 13 months.
 
 import { adminBiz, checkAllSites } from './biz.js';
-import { publishDue, refreshInsights, metaCallback } from './social.js';
+import { publishDue, refreshInsights, metaCallback, metaDiag } from './social.js';
 import { autopilotBeat, publicTown } from './agents.js';
 import { adminBuilds, publicBuild } from './builds.js';
 
@@ -51,6 +51,8 @@ export default {
       catch (e) { console.error('site checks failed', e); notes.push('Website checks failed: ' + e.message); status = 'failed'; }
       try { const r = await publishDue(env); if (r.length) { console.log('social', JSON.stringify(r)); const bad = r.filter(x => x.error).length; notes.push(plural(r.length - bad, 'post') + ' published' + (bad ? ', ' + bad + ' failed' : '')); if (bad && status === 'ok') status = 'attention'; } }
       catch (e) { console.error('social publish failed', e); notes.push('Publishing failed: ' + e.message); status = 'failed'; }
+      // a health check Claude can ask for by writing config 'diag_request' = 'meta'
+      try { const q = await env.DB.prepare("SELECT value FROM config WHERE key = 'diag_request'").first(); if (q && q.value === 'meta') { await env.DB.prepare("DELETE FROM config WHERE key = 'diag_request'").run(); await metaDiag(env); } } catch (e) { console.error('meta diag failed', e); }
       await autopilotBeat(env, status, notes.join('. ')).catch(e => console.error('autopilot beat failed', e));
     })());
     // once an hour: fetch reach and engagement for recent posts (kept small to stay well inside subrequest limits)

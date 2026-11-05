@@ -391,3 +391,27 @@ export async function adminSocial(req, env, id, sub, m, body, log) {
   }
   return reply({ error: 'Not found.' }, 404);
 }
+
+/* ---------- a one-off health check of the Facebook Page, its posts and the Meta app, written to config 'diag_meta' ----------
+   Asked for by writing config key 'diag_request' = 'meta' (Claude does this from D1). Never stores tokens. */
+export async function metaDiag(env) {
+  const out = { at: new Date().toISOString() }, tryG = async (k, path, params) => { try { out[k] = await graph(env, 'GET', path, params); } catch (e) { out[k] = { error: e.message }; } };
+  let ids = {}; try { ids = await metaIds(env, true); out.ids = ids; } catch (e) { out.ids = { error: e.message }; }
+  if (ids.page) await tryG('page', '/' + ids.page, { fields: 'name,link,is_published,is_unclaimed,followers_count,fan_count,verification_status,has_transitioned_to_new_page_experience,category' });
+  const posts = (await env.DB.prepare("SELECT id, kind, fb_id FROM social_posts WHERE fb_id != '' ORDER BY posted_at DESC LIMIT 5").all()).results || [];
+  out.posts = [];
+  for (const p of posts) {
+    const r = { id: p.id, kind: p.kind, fb_id: p.fb_id };
+    const fields = p.kind === 'reel' ? 'published,permalink_url,status,created_time,privacy' : 'is_published,is_hidden,is_expired,privacy,permalink_url,status_type,created_time,attachments{type,subattachments.limit(10){type}}';
+    try { r.fb = await graph(env, 'GET', '/' + p.fb_id, { fields }); } catch (e) { r.fb = { error: e.message }; }
+    out.posts.push(r);
+  }
+  if (env.META_APP_ID && env.META_APP_SECRET) {
+    const app = env.META_APP_ID + '|' + env.META_APP_SECRET;
+    await tryG('app', '/' + env.META_APP_ID, { access_token: app, fields: 'name,link,category,privacy_policy_url,terms_of_service_url,user_support_email,app_domains,icon_url' });
+    try { const tok = await pageToken(env); const d = await graph(env, 'GET', '/debug_token', { access_token: app, input_token: tok }); const x = d.data || {}; out.token = { type: x.type, is_valid: x.is_valid, app_id: x.app_id, expires_at: x.expires_at, scopes: x.scopes }; } catch (e) { out.token = { error: e.message }; }
+  }
+  const s = JSON.stringify(out).replace(/access_token=[^&"\s]+/g, 'access_token=…');
+  await env.DB.prepare('INSERT INTO config (key, value, updated) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated = excluded.updated').bind('diag_meta', s, out.at).run();
+  return out;
+}
