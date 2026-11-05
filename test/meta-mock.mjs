@@ -29,6 +29,19 @@ http.createServer(async (req, res) => {
   if (/^\/[^/]+\/(insights|video_insights)$/.test(p)) return send({ data: (u.searchParams.get('metric') || '').split(',').map(name => ({ name, values: [{ value: 42 }] })) });
   if (/^\/M\d+$/.test(p) && (u.searchParams.get('fields') || '').includes('like_count')) return send({ like_count: 7, comments_count: 2 });
   if ((u.searchParams.get('fields') || '').includes('summary(true)')) return send({ reactions: { summary: { total_count: 5 } }, likes: { summary: { total_count: 4 } }, comments: { summary: { total_count: 1 } }, shares: { count: 3 } });
+  // comments and messages
+  const ago = mins => new Date(Date.now() - mins * 60000).toISOString().replace('Z', '+0000');
+  if (p === '/__sent') return send(globalThis.__sent || []);
+  if (p === '/FBPOST/comments' && req.method === 'GET') return send({ data: [
+    { id: 'FC1', from: { id: 'U1', name: 'Jane Smith' }, message: 'How much would a website for my salon be?', created_time: ago(50), comments: { data: [] } },
+    { id: 'FC2', from: { id: 'U2', name: 'Tom Hughes' }, message: 'Looks great!', created_time: ago(300), comments: { data: [{ id: 'FC2R', from: { id: 'PAGE1', name: 'NEMORA' }, message: 'Thanks Tom!', created_time: ago(200) }] } }] });
+  if (p === '/IGM1/comments' && req.method === 'GET') return send({ data: [{ id: 'IC1', text: 'love this 🔥', username: 'sam.builds', timestamp: ago(30), replies: { data: [] } }] });
+  if (p === '/PAGE1/conversations' && req.method === 'GET') {
+    if (process.env.MOCK_NO_MSG_PERM) return send({ error: { message: '(#200) Requires pages_messaging permission to manage the object' } }, 400);
+    if (u.searchParams.get('platform') === 'instagram') return send({ data: [{ id: 'T2', updated_time: ago(60 * 30), messages: { data: [{ id: 'IM1', message: 'Do you build shops?', from: { id: 'IGS9', username: 'kerry.cakes' }, created_time: ago(60 * 30) }] } }] });
+    return send({ data: [{ id: 'T1', updated_time: ago(5), messages: { data: [{ id: 'MM2', message: 'Do you do websites for barbers?', from: { id: 'PSID3', name: 'Ali Khan' }, created_time: ago(5) }, { id: 'MM1', message: 'Hi', from: { id: 'PSID3', name: 'Ali Khan' }, created_time: ago(6) }] } }] });
+  }
+  if (/^\/(FC\d+)\/comments$/.test(p) || /^\/IC\d+\/replies$/.test(p) || p === '/PAGE1/messages') { (globalThis.__sent = globalThis.__sent || []).push({ path: p, body: Object.fromEntries(body) }); return send(p === '/PAGE1/messages' ? { recipient_id: 'x', message_id: 'mid.' + n++ } : { id: 'R' + n++ }); }
   const id = p.slice(1);
   if (u.searchParams.get('fields') === 'status_code') { seen[id] = (seen[id] || 0) + 1; return send({ status_code: seen[id] >= 2 ? 'FINISHED' : 'IN_PROGRESS' }); }
   if (u.searchParams.get('fields') === 'permalink') return send({ permalink: 'https://www.instagram.com/p/' + id + '/' });

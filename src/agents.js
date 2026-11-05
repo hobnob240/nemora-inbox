@@ -291,7 +291,9 @@ export async function townData(env, rows) {
   // things waiting for Charlie's OK, held up by the agent responsible
   const approvals = {};
   const vids = await all("SELECT id, kind, caption, media, scheduled_at FROM social_posts WHERE status = 'needs_approval' ORDER BY scheduled_at LIMIT 10");
+  const asks = await all("SELECT id, channel, author, text, reason, reply, status, error FROM social_inbox WHERE status IN ('needs_charlie', 'failed') ORDER BY created LIMIT 10");
   if (vids.length) approvals.social = vids.map(v => { let media = []; try { media = JSON.parse(v.media || '[]'); } catch (e) {} return { type: 'post', id: v.id, kind: v.kind, caption: String(v.caption || '').slice(0, 600), media: media.filter(u => /^https:\/\/nemora\.uk\//.test(u)).slice(0, 10), scheduled_at: v.scheduled_at }; });
+  if (asks.length) approvals.social = (approvals.social || []).concat(asks.map(r => ({ type: 'reply', id: r.id, channel: r.channel, author: String(r.author).slice(0, 120), text: String(r.text).slice(0, 1200), reason: String(r.reason || r.error || '').slice(0, 300), reply: String(r.reply || '').slice(0, 2000) })));
   // honest moods: switched on and running, but not producing anything
   const stuck = {}; const on = id => rows.some(a => a.id === id && a.enabled && a.status === 'active');
   if (on('outreach') && board.sent_week === 0) { const lastSent = await safe(async () => ((await env.DB.prepare("SELECT MAX(sent_at) m FROM sendlog WHERE lower(kind) != 'reply'").first()) || {}).m || '', ''); stuck.outreach = lastSent ? 'No emails sent in 7 days' : 'Hasn\'t sent a single email yet'; }

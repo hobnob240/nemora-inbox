@@ -468,3 +468,12 @@ button.v-bubble{pointer-events:auto;border:0;cursor:pointer;touch-action:manipul
 /* labels stay readable, not giant, when the town is zoomed */
 .v-sign{scale:calc(1 / var(--vz,1));transform-origin:50% 0}
 .v-bubble,.v-letter,.v-gate{scale:calc(1 / var(--vz,1));transform-origin:50% 100%}
+/* comments and messages */
+.inbox-list{display:grid;gap:10px}
+.inbox-item{border:1px solid var(--line,#e6e0d4);border-radius:12px;padding:12px;display:grid;gap:6px;min-width:0}
+.inbox-item.open{border-color:#d9b25f;background:rgba(232,207,152,.12)}
+.inbox-item .item-top{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center}
+.inbox-text{margin:0;white-space:pre-line;overflow-wrap:anywhere}
+.inbox-reply{margin:0;white-space:pre-line;overflow-wrap:anywhere;border-left:3px solid #d4b06a;padding-left:10px}
+.inbox-reply .who{display:block;font-size:.75rem;font-weight:700;color:var(--muted,#7a756c)}
+.inbox-item textarea{width:100%;min-height:72px;font-size:16px}

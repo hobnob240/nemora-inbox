@@ -20,6 +20,7 @@
 import { adminBiz, checkAllSites } from './biz.js';
 import { publishDue, refreshInsights, metaCallback, metaDiag } from './social.js';
 import { autopilotBeat, publicTown } from './agents.js';
+import { pollEngagement, sendReplies, tidyInbox } from './engage.js';
 import { adminBuilds, publicBuild } from './builds.js';
 
 const SESSION_TTL = 8 * 60 * 60;
@@ -43,7 +44,7 @@ export default {
   // every 15 minutes: check every client site is up and publish due social posts; hourly: social post results. Daily: delete visit statistics older than 13 months.
   async scheduled(event, env, ctx) {
     if (!env.DB) return;
-    if (event.cron === '17 3 * * *') { ctx.waitUntil(env.DB.prepare('DELETE FROM hits WHERE ts < ?').bind(Date.now() - 400 * 86400000).run()); return; }
+    if (event.cron === '17 3 * * *') { ctx.waitUntil(env.DB.prepare('DELETE FROM hits WHERE ts < ?').bind(Date.now() - 400 * 86400000).run()); ctx.waitUntil(tidyInbox(env).catch(e => console.error('tidy inbox', e))); return; }
     // the Autopilot: site checks and social publishing, then one heartbeat for the Agents page
     ctx.waitUntil((async () => {
       const notes = []; let status = 'ok';
@@ -51,6 +52,9 @@ export default {
       catch (e) { console.error('site checks failed', e); notes.push('Website checks failed: ' + e.message); status = 'failed'; }
       try { const r = await publishDue(env); if (r.length) { console.log('social', JSON.stringify(r)); const bad = r.filter(x => x.error).length; notes.push(plural(r.length - bad, 'post') + ' published' + (bad ? ', ' + bad + ' failed' : '')); if (bad && status === 'ok') status = 'attention'; } }
       catch (e) { console.error('social publish failed', e); notes.push('Publishing failed: ' + e.message); status = 'failed'; }
+      // comments and messages: send approved replies, then collect new ones
+      try { const sent = await sendReplies(env); const ok = sent.filter(x => x.ok).length, bad = sent.length - ok; if (sent.length) notes.push(ok + (ok === 1 ? ' reply' : ' replies') + ' sent' + (bad ? ', ' + bad + ' failed' : '')); if (bad && status === 'ok') status = 'attention'; } catch (e) { console.error('send replies failed', e); }
+      try { const got = await pollEngagement(env); if (got && (got.comments || got.messages)) notes.push((got.comments ? plural(got.comments, 'new comment') : '') + (got.comments && got.messages ? ', ' : '') + (got.messages ? plural(got.messages, 'new message') : '')); } catch (e) { console.error('collect comments failed', e); }
       // a health check Claude can ask for by writing config 'diag_request' = 'meta'
       try { const q = await env.DB.prepare("SELECT value FROM config WHERE key = 'diag_request'").first(); if (q && q.value === 'meta') { await env.DB.prepare("DELETE FROM config WHERE key = 'diag_request'").run(); await metaDiag(env); } } catch (e) { console.error('meta diag failed', e); }
       await autopilotBeat(env, status, notes.join('. ')).catch(e => console.error('autopilot beat failed', e));

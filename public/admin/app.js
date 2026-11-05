@@ -707,7 +707,17 @@ async function showVillage(pick) {
     else aboutTab(a, body);
   };
   const approveTab = (a, body) => {
+    const CH = { fb_comment: 'Facebook comment', ig_comment: 'Instagram comment', fb_dm: 'Facebook message', ig_dm: 'Instagram message' };
     body.replaceChildren(...a.approvals.map(it => {
+      if (it.type === 'reply') {
+        const box = h('textarea', { rows: 3, maxlength: 2000, 'aria-label': 'Reply to ' + it.author, placeholder: 'Write a reply as NEMORA…' }); box.value = it.reply || '';
+        const send = async (action) => { if (await act(() => api('admin/social/inbox', { method: 'POST', body: { id: it.id, action, text: box.value } }), action === 'reply' ? 'Reply goes out within 15 minutes' : 'Marked as no reply needed')) showVillage(a.id); };
+        return h('div', { class: 'approve-item inbox-item open' },
+          h('p', { class: 'small muted' }, (CH[it.channel] || 'Message') + ' from ' + it.author),
+          h('p', { class: 'inbox-text' }, it.text),
+          it.reason ? h('p', { class: 'small' }, a.name + ': ' + it.reason) : null,
+          box, h('div', { class: 'actions' }, h('button', { class: 'btn btn-gold', onclick: () => send('reply') }, 'Send reply'), h('button', { class: 'btn btn-ghost', onclick: () => send('skip') }, 'No reply needed')));
+      }
       const media = h('div', { class: 'approve-media' }, it.media.map(u => /\.mp4($|\?)/i.test(u) ? h('video', { src: u, controls: true, playsinline: true, preload: 'metadata' }) : h('img', { src: u, alt: 'Slide for this post', loading: 'lazy' })));
       const note = h('textarea', { rows: 3, maxlength: 1000, placeholder: 'What should they change?', 'aria-label': 'Note for ' + a.name });
       const back = h('div', { class: 'confirm', hidden: true }, 'Send it back with a note:', note, h('div', { class: 'actions' },
@@ -949,6 +959,7 @@ async function showAgent(id) {
       : empty('No runs yet', 'Each run adds a line here: what it did and anything that needs you.')));
 }
 async function showSocial() {
+  const inboxP = api('admin/social/inbox').catch(() => null);
   const [{ posts, now }, conn, pend] = await Promise.all([api('admin/social'), api('admin/social/connection').catch(() => ({ connected: false, reason: 'missing' })), api('admin/social/connect/pending').catch(() => ({ pages: [], error: '' }))]);
   const groups = { needs: x => x.status === 'needs_approval', scheduled: x => ['approved', 'publishing'].includes(x.status), posted: x => x.status === 'posted', back: x => x.status === 'rejected', failed: x => x.status === 'failed', all: () => true };
   if (socialFilter === 'needs' && !posts.some(groups.needs)) socialFilter = posts.some(groups.scheduled) ? 'scheduled' : 'all';
@@ -962,11 +973,46 @@ async function showSocial() {
       tile('Scheduled', num(posts.filter(groups.scheduled).length), (() => { const n = posts.filter(groups.scheduled).sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at))[0]; return n ? 'Next ' + at(n.scheduled_at) : 'Nothing queued'; })()),
       tile('Posted this week', num(week), plural(posts.filter(groups.posted).length, 'post') + ' in total'),
       tile('Failed', num(posts.filter(groups.failed).length), posts.some(groups.failed) ? h('span', { class: 'delta down' }, 'Open them to see why') : 'none')),
+    inboxCard(await inboxP),
     chipsRow([['needs', 'Needs your OK', posts.filter(groups.needs).length], ['scheduled', 'Scheduled', posts.filter(groups.scheduled).length], ['posted', 'Posted', posts.filter(groups.posted).length], ['back', 'Sent back', posts.filter(groups.back).length], ['failed', 'Failed', posts.filter(groups.failed).length], ['all', 'All', posts.length]].filter(([k, , n]) => n || k === 'all' || k === socialFilter), socialFilter, k => { socialFilter = k; showSocial(); }),
     list.length ? h('div', { class: 'post-grid' }, list.map(p => h('a', { class: 'post-card', href: '#post/' + p.id }, preview(p),
       h('div', { class: 'post-meta' }, h('div', { class: 'item-top' }, tag(SP, p.status), h('span', { class: 'when' }, SK[p.kind] + ' · ' + (p.status === 'posted' ? 'posted ' + day(p.posted_at) : p.scheduled_at ? at(p.scheduled_at) : 'not scheduled'))),
         h('p', { class: 'x' }, p.caption), h('span', { class: 'small muted' }, p.status === 'posted' && resShort(p) ? resShort(p) : plat(p.platforms))))))
       : empty('Nothing here yet', posts.length ? null : 'Your social media agent fills this up. Its first run plans the week\'s posts.'));
+}
+// comments and messages: the agent replies as NEMORA; anything it isn't sure about waits here for Charlie
+const INBOX_ST = { new: ['Waiting for the agent', 'muted'], needs_charlie: ['Needs you', 'warn'], approved: ['Sending soon', 'info'], sending: ['Sending', 'info'], sent: ['Answered', 'ok'], skipped: ['No reply needed', 'muted'], failed: ['Didn\'t send', 'bad'] };
+let inboxAll = false;
+function inboxCard(d) {
+  if (!d) return null;
+  const items = d.items || [], st = d.status || {};
+  const perm = (st.errors || []).some(e => /permission|\(#10\)|\(#200\)|\(#230\)|\(#3\)|not authori/i.test(e));
+  const open = items.filter(i => ['needs_charlie', 'failed'].includes(i.status));
+  const rest = items.filter(i => !['needs_charlie', 'failed'].includes(i.status));
+  const shown = open.concat(inboxAll ? rest : rest.slice(0, 6));
+  const row = i => {
+    const [label, tone] = INBOX_ST[i.status] || [i.status, 'muted'];
+    const canAct = ['needs_charlie', 'failed', 'new'].includes(i.status) && !/24 hours/.test(i.error || '');
+    const box = h('textarea', { rows: 3, maxlength: 2000, 'aria-label': 'Reply to ' + i.author, placeholder: 'Write a reply as NEMORA…' }); box.value = i.reply || '';
+    return h('div', { class: 'inbox-item' + (canAct && i.status !== 'new' ? ' open' : '') },
+      h('div', { class: 'item-top' }, h('strong', {}, i.author || 'Someone'), pill(label, tone === 'muted' ? '' : tone), h('span', { class: 'when' }, (d.channels || {})[i.channel] + ' · ' + at(i.created))),
+      h('p', { class: 'inbox-text' }, i.text),
+      i.post_caption ? h('p', { class: 'small muted' }, 'On: ' + i.post_caption) : null,
+      i.reason && i.status !== 'sent' ? h('p', { class: 'small' }, (i.status === 'needs_charlie' ? 'Why it\'s with you: ' : '') + i.reason) : null,
+      i.error && i.status === 'failed' ? h('div', { class: 'msg err' }, i.error) : null,
+      i.status === 'failed' && /24 hours/.test(i.error || '') ? h('div', { class: 'actions' }, h('button', { class: 'btn btn-sm btn-ghost', onclick: async () => { if (await act(() => api('admin/social/inbox', { method: 'POST', body: { id: i.id, action: 'skip' } }), 'Done')) showSocial(); } }, 'I\'ve answered it in the app')) : null,
+      i.status === 'sent' && i.reply ? h('p', { class: 'inbox-reply' }, h('span', { class: 'who' }, i.replied_by === 'charlie' ? 'You replied' : 'NEMORA replied'), i.reply) : i.status === 'sent' && i.replied_by === 'page' ? h('p', { class: 'small muted' }, 'Answered on Facebook or Instagram directly.') : null,
+      ['approved', 'sending'].includes(i.status) && i.reply ? h('p', { class: 'inbox-reply' }, h('span', { class: 'who' }, 'Reply going out'), i.reply) : null,
+      canAct ? h('div', {}, box, h('div', { class: 'actions' },
+        h('button', { class: 'btn btn-gold btn-sm', onclick: async () => { if (await act(() => api('admin/social/inbox', { method: 'POST', body: { id: i.id, action: 'reply', text: box.value } }), 'Reply goes out within 15 minutes')) showSocial(); } }, 'Send reply'),
+        h('button', { class: 'btn btn-sm btn-ghost', onclick: async () => { if (await act(() => api('admin/social/inbox', { method: 'POST', body: { id: i.id, action: 'skip' } }), 'Marked as no reply needed')) showSocial(); } }, 'No reply needed'))) : null);
+  };
+  return card('Comments and messages', [
+    h('p', { class: 'small muted' }, 'Your social media agent answers comments and messages as NEMORA, every hour from 8am to 10pm. Anything it isn\'t sure about (prices it can\'t confirm, complaints, anything personal) waits here for you.'),
+    perm ? h('div', { class: 'msg err' }, 'Facebook hasn\'t given permission to read comments and messages yet. Tap Reconnect above and allow everything Facebook asks for.') : null,
+    st.at ? h('p', { class: 'small muted' }, 'Last checked ' + at(st.at) + '.') : null,
+    shown.length ? h('div', { class: 'inbox-list' }, shown.map(row)) : h('p', { class: 'small muted' }, 'No comments or messages yet.'),
+    rest.length > 6 ? h('button', { class: 'btn btn-sm btn-ghost', onclick: () => { inboxAll = !inboxAll; showSocial(); } }, inboxAll ? 'Show fewer' : 'Show all ' + items.length) : null]);
 }
 function connCard(c, pend) {
   pend = pend || { pages: [], error: '' };

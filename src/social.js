@@ -14,6 +14,7 @@ import { agentOn } from './agents.js';
 //   META_API_VERSION  text    optional, Graph API version (default v23.0)
 //   META_API_BASE     text    optional, only for testing (default https://graph.facebook.com)
 
+import { adminInbox } from './engage.js';
 export const SOCIAL_SCHEMA = [
   `CREATE TABLE IF NOT EXISTS social_posts (id TEXT PRIMARY KEY, kind TEXT NOT NULL DEFAULT 'image', platforms TEXT NOT NULL DEFAULT 'fb,ig', caption TEXT NOT NULL DEFAULT '', link TEXT NOT NULL DEFAULT '', media TEXT NOT NULL DEFAULT '[]', scheduled_at TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'needs_approval', needs_approval INTEGER NOT NULL DEFAULT 1, idea TEXT NOT NULL DEFAULT '', feedback TEXT NOT NULL DEFAULT '', fb_id TEXT NOT NULL DEFAULT '', fb_url TEXT NOT NULL DEFAULT '', ig_container TEXT NOT NULL DEFAULT '', ig_children TEXT NOT NULL DEFAULT '', ig_id TEXT NOT NULL DEFAULT '', ig_url TEXT NOT NULL DEFAULT '', error TEXT NOT NULL DEFAULT '', attempts INTEGER NOT NULL DEFAULT 0, source TEXT NOT NULL DEFAULT 'agent', approved_at TEXT NOT NULL DEFAULT '', posted_at TEXT NOT NULL DEFAULT '', created TEXT NOT NULL DEFAULT '', updated TEXT NOT NULL DEFAULT '')`,
   `CREATE INDEX IF NOT EXISTS social_due ON social_posts(status, scheduled_at)`
@@ -25,7 +26,7 @@ const graphBase = env => (env.META_API_BASE || 'https://graph.facebook.com').rep
 export const mediaOrigin = env => String(env.MEDIA_ORIGIN || 'https://nemora.uk/social/');
 const parse = (s, f) => { try { return JSON.parse(s); } catch (e) { return f; } };
 
-async function graph(env, method, path, params = {}) {
+export async function graph(env, method, path, params = {}) {
   const url = new URL(graphBase(env) + path);
   const opts = { method, headers: {}, signal: AbortSignal.timeout(25000) };
   const tok = 'access_token' in params ? params.access_token : await pageToken(env);
@@ -344,6 +345,7 @@ export async function adminSocial(req, env, id, sub, m, body, log) {
     }
     return reply({ error: 'Not found.' }, 404);
   }
+  if (id === 'inbox') return adminInbox(env, m, body, log);
   if (id === 'connection' && m === 'GET') return reply(await connection(env));
   if (id === 'connect') return connectAdmin(env, new URL(req.url), sub, m, body, log);
   const p = await get(id);

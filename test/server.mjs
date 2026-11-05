@@ -33,8 +33,10 @@ http.createServer(async (req, res) => {
   const r = new Request('http://localhost:' + PORT + req.url, { method: req.method, headers, body: ['GET', 'HEAD'].includes(req.method) ? undefined : Buffer.concat(chunks) });
   Object.defineProperty(r, 'cf', { value: { country: req.headers['x-test-country'] || 'GB' } });
   if (req.url === '/__insights') { const { refreshInsights } = await import(path.join(ROOT, 'src/social.js')); res.end(JSON.stringify(await refreshInsights(env))); return; }
+  if (req.url === '/__engage') { const m = await import(path.join(ROOT, 'src/engage.js')); const sent = await m.sendReplies(env); const got = await m.pollEngagement(env); res.end(JSON.stringify({ sent, got })); return; }
   if (req.url === '/__cron') { const { publishDue } = await import(path.join(ROOT, 'src/social.js')); res.end(JSON.stringify(await publishDue(env))); return; }
   if (req.url === '/__ai') { res.end(JSON.stringify(globalThis.__aiCalls || [])); return; }
+  if (req.url === '/__q') { try { res.end(JSON.stringify(sql.prepare(Buffer.concat(chunks).toString()).all())); } catch (e) { res.statusCode = 500; res.end(String(e)); } return; }
   if (req.url === '/__sql') { try { sql.exec(Buffer.concat(chunks).toString()); res.end('ok'); } catch (e) { res.statusCode = 500; res.end(String(e)); } return; }
   if (req.url === '/__seed' ) { const now = Date.now(); for (let i = 0; i < 400; i++) { const t = now - Math.floor(Math.random() * 40) * 86400000; sql.prepare("INSERT INTO hits (ts, day, path, ref, device, country, visitor, kind) VALUES (?,?,?,?,?,?,?,?)").run(t, new Date(t).toISOString().slice(0, 10), ['/', '/services.html', '/contact.html', '/work.html', '/guides/how-much-does-a-website-cost.html'][i % 5], ['', 'google.com', 'facebook.com', '', 'bing.com'][i % 5 === 1 ? 1 : i % 7 === 0 ? 2 : i % 11 === 0 ? 4 : 0], ['Phone', 'Phone', 'Desktop', 'Tablet'][i % 4], ['GB', 'GB', 'GB', 'US', 'IE'][i % 5], 'v' + (i % 90), i % 37 === 0 ? 'enquiry' : 'view'); } res.end('seeded'); return; }
   const out = await worker.fetch(r, env, { waitUntil() {} });
