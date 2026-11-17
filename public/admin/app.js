@@ -23,7 +23,6 @@ function add(el, kids) { for (const c of [kids].flat(Infinity)) if (c != null &&
 const NS = 'http://www.w3.org/2000/svg';
 function s(tag, attrs = {}, ...kids) { const el = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v); for (const c of kids) if (c != null) el.append(c.nodeType ? c : document.createTextNode(String(c))); return el; }
 const ICONS = {
-  votes: 'M9 11l2 2 4-4|M4 4h16v16H4z',
   home: 'M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z',
   inbox: 'M22 12h-6l-2 3h-4l-2-3H2|M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z',
   leads: 'M22 12h-4l-3 9L9 3l-3 9H2',
@@ -158,11 +157,11 @@ const tag = (map, k) => pill((map[k] || [k])[0], (map[k] || [])[1]);
 
 /* ================= shell ================= */
 const NAV = [['home', 'Home'], ['inbox', 'Inbox'], ['leads', 'Leads'], ['sites', 'Sites'], ['work', 'Work'], ['money', 'Money']];
-const SIDE = [['home', 'Home'], ['village', 'Village'], ['agents', 'Agents'], ['inbox', 'Inbox'], ['leads', 'Leads'], ['social', 'Social'], ['votes', 'Voting'], ['sites', 'Sites'], ['builds', 'Builder'], ['work', 'Work'], ['money', 'Money']];
+const SIDE = [['home', 'Home'], ['village', 'Village'], ['agents', 'Agents'], ['inbox', 'Inbox'], ['leads', 'Leads'], ['social', 'Social'], ['sites', 'Sites'], ['builds', 'Builder'], ['work', 'Work'], ['money', 'Money']];
 const NAV_MORE = [['visitors', 'Visitors'], ['settings', 'Settings']];
-const MENU = [['village', 'Village'], ['agents', 'Agents'], ['builds', 'Builder'], ['social', 'Social'], ['votes', 'Voting'], ['visitors', 'Visitors'], ['settings', 'Settings']];
-const SECTION = { votes: 'votes', vote: 'votes', village: 'village', play: 'village', builds: 'builds', agents: 'agents', agent: 'agents', social: 'social', post: 'social', sites: 'sites', site: 'sites', inbox: 'inbox', leads: 'leads', lead: 'leads', work: 'work', project: 'work', client: 'work', clients: 'work', money: 'money', invoice: 'money', visitors: 'visitors', settings: 'settings', activity: 'settings', home: 'home' };
-const TITLES = { votes: 'Voting', village: 'Village', builds: 'Builder', agents: 'Agents', social: 'Social', sites: 'Sites', home: 'Home', inbox: 'Inbox', leads: 'Leads', work: 'Work', money: 'Money', visitors: 'Visitors', settings: 'Settings' };
+const MENU = [['village', 'Village'], ['agents', 'Agents'], ['builds', 'Builder'], ['social', 'Social'], ['visitors', 'Visitors'], ['settings', 'Settings']];
+const SECTION = { village: 'village', play: 'village', builds: 'builds', agents: 'agents', agent: 'agents', social: 'social', post: 'social', sites: 'sites', site: 'sites', inbox: 'inbox', leads: 'leads', lead: 'leads', work: 'work', project: 'work', client: 'work', clients: 'work', money: 'money', invoice: 'money', visitors: 'visitors', settings: 'settings', activity: 'settings', home: 'home' };
+const TITLES = { village: 'Village', builds: 'Builder', agents: 'Agents', social: 'Social', sites: 'Sites', home: 'Home', inbox: 'Inbox', leads: 'Leads', work: 'Work', money: 'Money', visitors: 'Visitors', settings: 'Settings' };
 let me = { username: '', role: 'owner', name: '', unread: 0 };
 function shell() {
   $('#side-nav').replaceChildren(...SIDE.map(([k, l]) => h('a', { href: '#' + k, 'data-k': k }, icon(k), l, k === 'inbox' ? h('span', { class: 'count', hidden: true }) : null)), h('div', { class: 'sep' }), ...NAV_MORE.map(([k, l]) => h('a', { href: '#' + k, 'data-k': k }, icon(k), l)));
@@ -199,7 +198,6 @@ async function route() {
     builds: showBuilds, village: () => showVillage(id), play: () => showVillage(null, true),
     agents: showAgents, agent: () => showAgent(id),
     social: showSocial, post: () => showPost(id),
-    votes: showVotes, vote: () => showVote(id, extra),
     sites: showSites, site: () => id === 'new' ? editSite(null, extra) : showSite(id),
     money: showMoney, invoice: () => id === 'new' ? editInvoice(null, extra) : showInvoice(id),
     visitors: showTraffic, settings: showSettings, activity: showActivity
@@ -1310,82 +1308,3 @@ async function showActivity() {
 /* ================= start ================= */
 window.addEventListener('hashchange', route);
 (async () => { if (await refreshMe()) { shell(); route(); } })();
-
-/* ================= voting (polls and awards, e.g. the Spitfire Awards) ================= */
-const POLL = { draft: ['Draft', 'warn'], open: ['Open', 'ok'], closed: ['Closed', ''] };
-async function showVotes() {
-  const d = await api('admin/votes');
-  const make = async tpl => { const r = await act(() => api('admin/votes', { method: 'POST', body: tpl })); if (r) go('vote/' + r.id + '/edit'); };
-  const head = pageHead('Clients', 'Voting', 'Build a vote or awards for a client, share the link, and watch the results come in. Nothing changes on the client’s own website.', [
-    h('button', { class: 'btn btn-gold', onclick: () => make({ template: 'spitfire' }) }, icon('plus'), 'Spitfire Awards'),
-    h('button', { class: 'btn', onclick: () => make({ title: 'New vote' }) }, icon('plus'), 'Blank vote')]);
-  render(head, d.polls.length ? card(null, h('div', { class: 'list' }, d.polls.map(p => h('a', { class: 'row', href: '#vote/' + p.id },
-    h('span', { class: 'body' }, h('span', { class: 't' }, p.title), h('span', { class: 's' }, [p.client, p.closes ? 'closes ' + full(p.closes) : 'no closing date'].filter(Boolean).join(' · '))),
-    h('span', { class: 'end' }, h('span', { class: 'amt' }, plural(p.votes, 'vote')), tag(POLL, p.status === 'open' && !p.live ? 'closed' : p.status)))))) :
-    empty('No votes yet', 'Start with the Spitfire Awards (their 13 categories are ready to go) or a blank vote.', h('button', { class: 'btn btn-gold', onclick: () => make({ template: 'spitfire' }) }, 'Set up the Spitfire Awards')));
-}
-async function showVote(id, tab) {
-  const d = await api('admin/votes/' + id), p = d.poll;
-  tab = tab === 'edit' ? 'edit' : 'results';
-  const live = p.status === 'open' && p.live;
-  const head = pageHead(p.client || 'Voting', p.title, live ? 'Open for votes' : p.status === 'draft' ? 'Draft: only you can see this until you open it.' : 'Closed', [
-    p.status !== 'draft' ? h('a', { class: 'btn', href: d.link, target: '_blank', rel: 'noopener' }, icon('link'), 'Open voting page') : null], ['votes', 'Voting']);
-  const seg = chipsRow([['results', 'Results'], ['edit', 'Set up']], tab, k => go('vote/' + id + (k === 'edit' ? '/edit' : '')));
-  const share = card('Share', [
-    h('p', { class: 'muted small' }, p.status === 'draft' ? 'Open the vote (in Set up) and this link starts working. Put it in a Facebook post, an Instagram story or a QR code at the show.' : 'Anyone with this link can vote, once per phone or browser.'),
-    h('div', { class: 'actions' }, h('input', { class: 'input', value: d.link, readonly: true, 'aria-label': 'Voting link', onfocus: e => e.target.select() }), h('button', { class: 'btn btn-sm', onclick: () => copy(d.link, 'Link') }, 'Copy'))]);
-  if (tab === 'results') {
-    const dl = h('button', { class: 'btn btn-sm', onclick: async () => {
-      const r = await fetch('/api/admin/votes/' + id + '/csv', { credentials: 'same-origin' }); if (!r.ok) return toast('Couldn’t download the votes.', true);
-      const u = URL.createObjectURL(await r.blob()); const a = h('a', { href: u, download: p.slug + '-votes.csv' }); document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 4000); } }, 'Download all votes (CSV)');
-    render(head, seg,
-      h('div', { class: 'tiles' }, tile('Votes', num(d.total), d.last ? 'last ' + when(d.last) : 'none yet', 'hero'), tile('Status', (POLL[live ? 'open' : p.status === 'draft' ? 'draft' : 'closed'] || [''])[0], p.closes ? (live ? 'closes ' : 'closed ') + full(p.closes) : 'no closing date'), tile('Categories', num(p.questions.length))),
-      share,
-      d.total ? d.tallies.map(t => bars(t.label, t.rows.map(r => ({ label: r.answer + (r.spellings > 1 ? ` (${r.spellings} spellings)` : ''), votes: r.votes })), l => l, 'votes', 'No votes in this category yet.')) : card(null, empty('No votes yet', live ? 'Share the link and the results appear here as people vote.' : 'Results appear here once the vote is open and people start voting.')),
-      d.total ? card('Votes', [h('p', { class: 'muted small' }, 'Typed answers are grouped when they only differ in capitals, spaces or punctuation (“dave smith” and “Dave Smith!” count together). Check near-misses before announcing winners.'), h('div', { class: 'actions' }, dl,
-        h('button', { class: 'btn btn-sm btn-danger', onclick: e => { e.currentTarget.nextElementSibling.hidden = false; } }, 'Clear all votes'),
-        confirmBox(`Delete all ${num(d.total)} votes for ${p.title}? This can’t be undone.`, 'Delete votes', async () => { if (await act(() => api('admin/votes/' + id + '/votes', { method: 'DELETE' }), 'Votes cleared')) showVote(id); }))]) : null);
-    return;
-  }
-  // ---- set up ----
-  const qs = p.questions.map(q => ({ ...q, options: q.options.join('\n') }));
-  const els = {};
-  const field = (k, label, input, hint) => { els[k] = input; return h('div', { class: 'field' }, h('label', { for: 'v-' + k }, label), hint ? h('span', { class: 'hint' }, hint) : null, input); };
-  const closesLocal = p.closes ? new Date(new Date(p.closes).getTime() - new Date(p.closes).getTimezoneOffset() * 60000).toISOString().slice(0, 16) : '';
-  const basics = card('The vote', h('div', { class: 'fields two' },
-    field('title', 'Title', h('input', { id: 'v-title', value: p.title, maxlength: 100 })),
-    field('client', 'Client', h('input', { id: 'v-client', value: p.client, maxlength: 80 })),
-    style(field('intro', 'Intro', h('textarea', { id: 'v-intro', rows: 3 }, p.intro), 'Shown under the title.'), 'grid-column', '1 / -1'),
-    field('closes', 'Voting closes', h('input', { id: 'v-closes', type: 'datetime-local', value: closesLocal }), 'Leave empty to close it by hand.'),
-    field('status', 'Status', h('select', { id: 'v-status' }, [['draft', 'Draft (not public)'], ['open', 'Open for votes'], ['closed', 'Closed']].map(([v, l]) => h('option', { value: v, selected: p.status === v }, l)))),
-    field('theme', 'Look', h('select', { id: 'v-theme' }, Object.entries(d.themes).map(([v, l]) => h('option', { value: v, selected: p.theme === v }, l)))),
-    field('slug', 'Link', h('input', { id: 'v-slug', value: p.slug, maxlength: 50, autocapitalize: 'none', spellcheck: 'false' }), '…/vote/' + p.slug + '/'),
-    style(field('footer', 'Small print', h('textarea', { id: 'v-footer', rows: 2 }, p.footer), 'Shown at the bottom, e.g. awards that aren’t voted on.'), 'grid-column', '1 / -1'),
-    style(h('label', { class: 'check' }, (els.ask_name = h('input', { type: 'checkbox', checked: p.ask_name })), ' Ask voters for their name (helps spot people voting twice; names are personal data, so only turn this on if you need it)'), 'grid-column', '1 / -1')));
-  const list = h('div', { class: 'qlist' });
-  const drawQs = () => list.replaceChildren(...qs.map((q, i) => {
-    const kind = h('select', { 'aria-label': 'Answer type', onchange: e => { q.kind = e.target.value; drawQs(); } }, [['text', 'They type a name'], ['choice', 'They pick from a list']].map(([v, l]) => h('option', { value: v, selected: q.kind === v }, l)));
-    return h('div', { class: 'qedit card' },
-      h('div', { class: 'qtop' }, h('span', { class: 'qn' }, String(i + 1)), h('input', { value: q.label, maxlength: 100, 'aria-label': 'Category ' + (i + 1), oninput: e => { q.label = e.target.value; } }), kind),
-      h('input', { value: q.note || '', maxlength: 160, placeholder: 'Hint under the question (optional)', 'aria-label': 'Hint', oninput: e => { q.note = e.target.value; } }),
-      q.kind === 'choice' ? h('div', { class: 'field' }, h('label', {}, 'Choices, one per line'), q.options.trim() ? null : h('span', { class: 'hint warn' }, 'Add the acts before opening the vote.'), h('textarea', { rows: 5, oninput: e => { q.options = e.target.value; } }, q.options)) : null,
-      h('div', { class: 'actions' },
-        h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: q.required, onchange: e => { q.required = e.target.checked; } }), ' Must answer'),
-        i > 0 ? h('button', { class: 'btn btn-sm', type: 'button', onclick: () => { [qs[i - 1], qs[i]] = [qs[i], qs[i - 1]]; drawQs(); } }, 'Move up') : null,
-        h('button', { class: 'btn btn-sm btn-danger', type: 'button', onclick: () => { qs.splice(i, 1); drawQs(); } }, 'Remove')));
-  }), h('button', { class: 'btn', type: 'button', onclick: () => { qs.push({ label: '', kind: 'text', options: '', required: false, note: '' }); drawQs(); list.querySelector('.qedit:last-of-type input').focus(); } }, icon('plus'), 'Add a category'));
-  drawQs();
-  const err = h('div', { class: 'msg err', role: 'alert', hidden: true });
-  const save = h('button', { class: 'btn btn-gold', type: 'button', onclick: async () => {
-    err.hidden = true; save.disabled = true;
-    try {
-      const v = k => els[k].value;
-      const r = await api('admin/votes/' + id, { method: 'PUT', body: { title: v('title'), client: v('client'), intro: v('intro'), footer: v('footer'), closes: v('closes') ? new Date(v('closes')).toISOString() : '', status: v('status'), theme: v('theme'), slug: v('slug'), ask_name: els.ask_name.checked, questions: qs.map(q => ({ ...q, options: q.options.split('\n') })) } });
-      toast('Saved'); go('vote/' + id);
-    } catch (x) { if (x.message !== 'logged out') { err.textContent = x.message; err.hidden = false; err.scrollIntoView({ block: 'nearest' }); } }
-    finally { save.disabled = false; }
-  } }, 'Save');
-  const del = h('button', { class: 'btn btn-danger', type: 'button', onclick: e => { e.currentTarget.nextElementSibling.hidden = false; } }, 'Delete this vote');
-  render(head, seg, basics, card('Categories', [h('p', { class: 'muted small' }, 'Each category is one question. “Pick from a list” stops misspellings, so it’s best when you know who’s in the running.'), list]), share,
-    h('div', { class: 'savebar' }, err, h('div', { class: 'actions' }, save, del, confirmBox(`Delete ${p.title} and all its votes? This can’t be undone.`, 'Delete', async () => { if (await act(() => api('admin/votes/' + id, { method: 'DELETE' }), 'Deleted')) go('votes'); }))));
-}

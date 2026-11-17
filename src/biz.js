@@ -4,7 +4,6 @@
 // SQL always uses bound parameters.
 
 import { adminGame } from './game.js';
-import { adminVotes } from './votes.js';
 import { adminSocial, SOCIAL_SCHEMA } from './social.js';
 import { adminAgents, agentAlerts, adminVillage } from './agents.js';
 
@@ -112,7 +111,7 @@ const plusDays = (iso, n) => { const d = new Date(iso + 'T12:00:00Z'); d.setUTCD
 // returns a Response, or null if the path isn't a business route
 export async function adminBiz(req, env, path, m, readJson, log, user, extra, role = 'owner') {
   const parts = path.split('/'), [res, id, sub] = parts;
-  if (!['dashboard', 'leads', 'outbox', 'clients', 'projects', 'invoices', 'reports', 'settings', 'rulebook', 'sites', 'worklog', 'cf', 'social', 'agents', 'village', 'game', 'votes'].includes(res)) return null;
+  if (!['dashboard', 'leads', 'outbox', 'clients', 'projects', 'invoices', 'reports', 'settings', 'rulebook', 'sites', 'worklog', 'cf', 'social', 'agents', 'village', 'game'].includes(res)) return null;
   if (!env.DB) return reply({ error: 'The database is not connected. Add the D1 binding called DB in Cloudflare.' }, 503);
   await ensureBizSchema(env);
   try {
@@ -130,7 +129,6 @@ export async function adminBiz(req, env, path, m, readJson, log, user, extra, ro
     if (res === 'agents') return await adminAgents(env, id, sub, m, body, log, role);
     if (res === 'village') return await adminVillage(env, new URL(req.url), m, body, log);
     if (res === 'game') return await adminGame(env, user, id, m, body, log);
-    if (res === 'votes') return await adminVotes(env, id, sub, m, body, log, new URL(req.url));
     if (res === 'social') return await adminSocial(req, env, id, sub, m, body, log);
     if (res === 'sites') return await sites(env, id, sub, m, body, log);
     if (res === 'worklog' && id && m === 'DELETE') { await run(env, 'DELETE FROM worklog WHERE id = ?', Number(id) || 0); return reply({ ok: true }); }

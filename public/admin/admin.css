@@ -481,16 +481,3 @@ button.v-bubble{pointer-events:auto;border:0;cursor:pointer;touch-action:manipul
 .play-card h2{margin:0 0 2px;color:#fbf3df}
 .play-card .muted{color:#d9ccb0}
 .play-card .btn{min-width:120px;font-size:1.05rem}
-
-/* voting */
-.qlist{display:grid;gap:10px}
-.qedit{display:grid;gap:8px;padding:14px;margin:0;box-shadow:none;background:var(--surface-2)}
-.qtop{display:grid;grid-template-columns:auto minmax(0,1fr) minmax(0,190px);gap:8px;align-items:center}
-.qn{display:inline-grid;place-items:center;width:28px;height:28px;border-radius:50%;background:var(--gold-wash);color:var(--gold-ink);font-weight:700;font-size:13px}
-.check{display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer}
-.check input{width:20px;height:20px;min-height:0;padding:0;accent-color:var(--gold);flex-shrink:0}
-.hint.warn{color:var(--warn)}
-.savebar{position:sticky;bottom:0;z-index:5;background:var(--bg);border-top:1px solid var(--line);padding:12px 0 calc(12px + env(safe-area-inset-bottom,0px));display:grid;gap:8px;margin-top:8px}
-.actions input.input{flex:1;min-width:0}
-@media (max-width:999px){.savebar{bottom:calc(64px + env(safe-area-inset-bottom,0px))}}
-@media (max-width:560px){.qtop{grid-template-columns:auto minmax(0,1fr)}.qtop select{grid-column:1/-1}}

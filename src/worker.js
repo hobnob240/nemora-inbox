@@ -22,7 +22,6 @@ import { publishDue, refreshInsights, metaCallback, metaDiag } from './social.js
 import { autopilotBeat, publicTown } from './agents.js';
 import { pollEngagement, sendReplies, tidyInbox } from './engage.js';
 import { adminBuilds, publicBuild } from './builds.js';
-import { publicVote } from './votes.js';
 
 const SESSION_TTL = 8 * 60 * 60;
 const COOKIE = '__Host-nemora_admin';
@@ -83,7 +82,6 @@ async function route(req, env, ctx) {
   if (p === '/' ) return redirect(url.origin + '/admin/');
   if (p === '/meta/callback' && m === 'GET') return metaCallback(req, env, url);
   if ((p.startsWith('/v/') || p.startsWith('/b/img/')) && m === 'GET' && env.DB) { const r = await publicBuild(req, env, url); if (r) return r; }
-  if (p.startsWith('/vote/') && env.DB) { const r = await publicVote(req, env, url); if (r) return adminHeaders(r); }
   if (p.startsWith('/town/') && m === 'GET' && env.DB) { const r = await publicTown(req, env, url); if (r) return adminHeaders(r); }
   if (p === '/api/setup-state' && m === 'GET') { const cr = await credentials(env); return json({ needsSetup: !cr.hash, hasCode: !!env.SETUP_CODE }); }
   if (p === '/api/setup') return m === 'POST' ? setup(req, env, url) : notAllowed();
