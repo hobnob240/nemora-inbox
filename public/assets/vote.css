@@ -1,0 +1,37 @@
+/* Public voting page. Themes are classes on <body>; no inline styles or scripts are needed. */
+@font-face { font-family: Inter; src: url(/assets/fonts/inter-400.woff) format("woff"); font-weight: 400; font-display: swap; }
+@font-face { font-family: Inter; src: url(/assets/fonts/inter-600.woff) format("woff"); font-weight: 600 800; font-display: swap; }
+@font-face { font-family: Serif; src: url(/assets/fonts/serif.woff) format("woff"); font-display: swap; }
+:root { --bg: #f6f4ef; --panel: #ffffff; --ink: #1d1d1b; --muted: #5d5b55; --line: #dcd8ce; --accent: #2f3a8f; --on-accent: #fff; --ok: #e3f3e6; --bad: #fbe4e1; --head: Serif, Georgia, serif; }
+.t-spitfire { --bg: #0d1b3d; --panel: #13264f; --ink: #f4f6fb; --muted: #b9c3da; --line: #2d4174; --accent: #e0262f; --on-accent: #fff; --ok: #1d3d2e; --bad: #4a1c22; --head: Inter, system-ui, sans-serif; }
+.t-nemora { --bg: #0f0e0c; --panel: #1a1815; --ink: #f2ece0; --muted: #b5ab98; --line: #3a352c; --accent: #d9b871; --on-accent: #15120b; --ok: #1f2d22; --bad: #3a1d1b; }
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; -webkit-tap-highlight-color: transparent; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.55 Inter, system-ui, sans-serif; }
+.wrap { max-width: 620px; margin: 0 auto; padding: max(32px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 32px max(16px, env(safe-area-inset-left)); }
+.logo { display: block; width: 116px; height: 116px; margin: 0 auto 18px; border-radius: 50%; background: #fff; object-fit: contain; padding: 6px; }
+h1 { font-family: var(--head); font-weight: 800; font-size: clamp(2rem, 7vw, 2.8rem); line-height: 1.05; margin: 0 0 14px; text-align: center; text-wrap: balance; letter-spacing: -0.01em; }
+.t-spitfire h1 { text-transform: uppercase; letter-spacing: 0.01em; }
+.t-spitfire h1::after { content: ""; display: block; width: 72px; height: 4px; background: var(--accent); margin: 14px auto 0; }
+.intro { color: var(--muted); text-align: center; margin: 0 0 10px; }
+.intro.big { font-size: 1.3rem; color: var(--ink); font-weight: 600; margin-top: 24px; }
+.intro a, .small a, .foot a { color: inherit; }
+.closes { text-align: center; font-weight: 600; margin: 0 0 22px; }
+.note { padding: 12px 14px; border-radius: 10px; margin: 0 0 18px; }
+.note.ok { background: var(--ok); } .note.bad { background: var(--bad); }
+.note p { margin: 0; font-weight: 600; } .note ul { margin: 6px 0 0; padding-left: 1.2em; }
+form { display: grid; gap: 12px; }
+.q { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: grid; gap: 6px; }
+.q label { font-weight: 600; font-size: 1.05rem; display: flex; gap: 10px; align-items: baseline; }
+.q .n { flex-shrink: 0; display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: var(--on-accent); font-size: 0.8rem; font-weight: 700; }
+.opt { font-weight: 400; color: var(--muted); font-size: 0.9rem; }
+.hint { margin: 0; color: var(--muted); font-size: 0.9rem; }
+input, select { width: 100%; min-height: 48px; padding: 10px 12px; font: inherit; font-size: 16px; color: #1d1d1b; background: #fff; border: 1px solid var(--line); border-radius: 10px; }
+input:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+button { margin-top: 6px; min-height: 54px; border: 0; border-radius: 999px; background: var(--accent); color: var(--on-accent); font: inherit; font-weight: 700; font-size: 1.05rem; cursor: pointer; touch-action: manipulation; transition: transform 120ms ease-out, filter 120ms ease-out; }
+button:active { transform: scale(0.98); }
+@media (hover: hover) and (pointer: fine) { button:hover { filter: brightness(1.08); } }
+.small { color: var(--muted); font-size: 0.85rem; text-align: center; margin: 4px 0 0; }
+.hp { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
+.foot { text-align: center; color: var(--muted); font-size: 0.8rem; padding: 8px 16px max(24px, env(safe-area-inset-bottom)); }
+@media (prefers-reduced-motion: reduce) { button { transition: none; } }
