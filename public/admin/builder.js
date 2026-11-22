@@ -37,6 +37,12 @@
     ['cta', 'Call to action band', 'Sections', `<section class="nm-band"><div class="nm-wrap nm-band-in"><h2>Ready when you are</h2><a class="nm-btn nm-light" href="#contact">Get a quote</a></div></section>`],
     ['contact', 'Contact details', 'Sections', `<section class="nm-section" id="contact"><div class="nm-wrap nm-split"><div><h2>Get in touch</h2><p>Phone, email, address and opening hours.</p></div><div class="nm-card"><p><strong>Phone</strong><br><a href="tel:">Add the number</a></p><p><strong>Email</strong><br><a href="mailto:">Add the email</a></p><p><strong>Opening hours</strong><br>Mon to Fri, 9am to 5pm</p></div></div></section>`],
     ['footer', 'Footer', 'Sections', `<footer class="nm-foot"><div class="nm-wrap">Business name. Website by NEMORA.</div></footer>`],
+    ['shop-grid', 'Products with filters', 'Shop', `<section class="nm-section" id="shop"><div class="nm-wrap"><h2>Shop</h2><div class="nm-filters"><a class="nm-filter" href="#shop" data-nm-filter>All</a><a class="nm-filter" href="#shop" data-nm-filter>Category</a></div><div class="nm-products"><article class="nm-product" data-nm-product><img class="nm-p-img" src="${PH(800, 1000)}" alt=""><div class="nm-p-body"><p class="nm-p-cat">Category</p><h3 class="nm-p-name">Product name</h3><p class="nm-p-desc">One line about it</p><div class="nm-p-foot"><p class="nm-p-price">£20</p><a class="nm-btn nm-add" href="#basket" data-nm-add>Add to basket</a></div></div></article> <article class="nm-product" data-nm-product><img class="nm-p-img" src="${PH(800, 1000)}" alt=""><div class="nm-p-body"><p class="nm-p-cat">Category</p><h3 class="nm-p-name">Product name</h3><p class="nm-p-desc">One line about it</p><div class="nm-p-foot"><p class="nm-p-price">£20</p><a class="nm-btn nm-add" href="#basket" data-nm-add>Add to basket</a></div></div></article> <article class="nm-product" data-nm-product><img class="nm-p-img" src="${PH(800, 1000)}" alt=""><div class="nm-p-body"><p class="nm-p-cat">Category</p><h3 class="nm-p-name">Product name</h3><p class="nm-p-desc">One line about it</p><div class="nm-p-foot"><p class="nm-p-price">£20</p><a class="nm-btn nm-add" href="#basket" data-nm-add>Add to basket</a></div></div></article></div></div></section>`],
+    ['shop-product', 'One product', 'Shop', `<article class="nm-product" data-nm-product><img class="nm-p-img" src="${PH(800, 1000)}" alt=""><div class="nm-p-body"><p class="nm-p-cat">Category</p><h3 class="nm-p-name">Product name</h3><p class="nm-p-desc">One line about it</p><div class="nm-p-foot"><p class="nm-p-price">£20</p><a class="nm-btn nm-add" href="#basket" data-nm-add>Add to basket</a></div></div></article>`],
+    ['shop-note', 'Delivery bar', 'Shop', `<div class="nm-shopnote">Delivery <span data-nm-delivery>£3.95</span>, free on orders over <span data-nm-free-over>£40</span></div>`],
+    ['shop-nav', 'Top bar with basket', 'Shop', `<header class="nm-nav"><div class="nm-wrap nm-nav-in"><a class="nm-logo" href="#">Shop name</a><nav class="nm-links"><a href="#shop">Shop</a><a href="#about">About</a></nav><a class="nm-basket-link" href="#basket" data-nm-basket>Basket <span class="nm-count" data-nm-count>0</span></a></div></header>`],
+    ['shop-basket', 'Basket button', 'Shop', `<a class="nm-basket-link" href="#basket" data-nm-basket>Basket <span class="nm-count" data-nm-count>0</span></a>`],
+    ['shop-perks', 'Delivery and returns', 'Shop', `<section class="nm-section"><div class="nm-wrap"><h2>Delivery and returns</h2><div class="nm-perks"><div class="nm-perk"><h3>Delivery</h3><p>How orders are sent and how long they take.</p></div><div class="nm-perk"><h3>Collection</h3><p>Whether customers can pick up, and where.</p></div><div class="nm-perk"><h3>Returns</h3><p>Returns within 14 days of delivery.</p></div></div></div></section>`],
     ['h', 'Heading', 'Basics', `<h2>A heading</h2>`],
     ['p', 'Paragraph', 'Basics', `<p>Some text. Click to edit it.</p>`],
     ['btn', 'Button', 'Basics', `<a class="nm-btn" href="#">Button</a>`],
@@ -64,6 +70,7 @@
     try { build = (await api('builds/' + id)).build; } catch (e) { $('#b-title').textContent = 'Not found'; show([e.message], 'bad'); return; }
     $('#b-title').textContent = build.title; document.title = build.title + ' | Builder';
     approved = build.status === 'approved';
+    $('#b-orders').hidden = !build.shop;
     const cfg = {
       container: '#gjs', height: '100%', width: 'auto', storageManager: false, fromElement: false, cssIcons: '',
       undoManager: { trackSelection: false },
@@ -101,6 +108,12 @@
       say(approved ? '' : 'Saved');
       if (approved) showApproved();
       editor.on('update', queueSave);
+    });
+    editor.DomComponents.addType('nm-product', { isComponent: el => el.hasAttribute && el.hasAttribute('data-nm-product'), model: { defaults: { name: 'Product', traits: [{ type: 'checkbox', name: 'data-nm-soldout', label: 'Sold out', valueTrue: 'true', valueFalse: 'false' }] } } });
+    editor.on('block:drag:stop', (comp, block) => {
+      if (!block || !/^shop-/.test(block.getId ? block.getId() : block.id)) return;
+      if (!editor.Css.getRules('.nm-product').length) editor.Css.addRules(build.shopCss || '');
+      $('#b-orders').hidden = false;
     });
     editor.on('component:selected', () => { $('#b-pick').hidden = true; });
     editor.on('component:deselected', () => { $('#b-pick').hidden = !!editor.getSelected(); });
@@ -141,6 +154,20 @@
     openDialog(el('h2', {}, 'Client link'), el('p', {}, 'Send this to the client. Their screen updates by itself a second or two after each change you make. It is private: only people with the link can see it, and search engines are told to ignore it.'), input,
       el('div', { class: 'b-row' }, el('button', { type: 'button', class: 'b-btn b-gold', onclick: async e => { try { await navigator.clipboard.writeText(url); e.target.textContent = 'Copied'; } catch (err) { input.select(); } } }, 'Copy link'), el('a', { class: 'b-btn', href: build.link, target: '_blank', rel: 'noopener' }, 'Open it'),
         el('button', { type: 'button', class: 'b-btn', onclick: async () => { const d = await api('builds/' + id + '/relink', { method: 'POST' }); build.link = d.build.link; dlg.close(); $('#b-link').click(); } }, 'Make a new link (the old one stops working)')));
+  });
+  $('#b-orders').addEventListener('click', async () => {
+    let orders = [];
+    try { orders = (await api('builds/' + id + '/orders')).orders; } catch (e) { say(e.message, true); return; }
+    const money = p => new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(p / 100);
+    const shopUrl = location.origin + build.link.replace('/v/', '/s/');
+    openDialog(el('h2', {}, 'Shop orders'),
+      el('p', {}, 'Orders placed on the working shop link. No card is taken there: it shows the client what an order looks like. Kept for 90 days.'),
+      el('div', { class: 'b-row' }, el('a', { class: 'b-btn b-gold', href: shopUrl, target: '_blank', rel: 'noopener' }, 'Open the working shop'), el('button', { type: 'button', class: 'b-btn', onclick: async e => { try { await navigator.clipboard.writeText(shopUrl); e.target.textContent = 'Copied'; } catch (err) { say(shopUrl); } } }, 'Copy shop link')),
+      orders.length ? el('ol', { class: 'b-versions' }, orders.map(o => el('li', {}, el('span', {},
+        el('strong', {}, o.ref + ', ' + money(o.total)), ' ' + new Date(o.created).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }), el('br'),
+        o.items.map(i => i.qty + ' \u00d7 ' + i.name).join(', ') + (o.delivery ? ', delivery ' + money(o.delivery) : ', free delivery'), el('br'),
+        o.name + ', ' + o.email + (o.phone ? ', ' + o.phone : ''), el('br'), o.address + (o.note ? ' (Note: ' + o.note + ')' : ''))))) : el('p', {}, 'No orders yet. Open the shop, add something to the basket and check out to see one arrive here.'),
+      orders.length ? el('div', { class: 'b-row' }, el('button', { type: 'button', class: 'b-btn', onclick: async () => { await api('builds/' + id + '/orders', { method: 'DELETE' }); dlg.close(); say('Test orders cleared'); } }, 'Clear these test orders')) : null);
   });
   $('#b-versions').addEventListener('click', async () => {
     const { versions } = await api('builds/' + id + '/versions');

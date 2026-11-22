@@ -16,6 +16,8 @@ const reply = (data, status = 200, headers = {}) => new Response(JSON.stringify(
 const clean = (v, max) => String(v == null ? '' : v).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '').trim().slice(0, max);
 
 import { IMPORTS } from './imports.js';
+import { adminShopOrders } from './shop.js';
+import { SHOP_CSS } from './shop-template.js';
 let ready = false;
 async function ensure(env) {
   if (ready) return;
@@ -74,8 +76,8 @@ img{max-width:100%;display:block}a{color:inherit}
 };
 
 function out(b, full) {
-  const o = { id: b.id, title: b.title, project_id: b.project_id, rev: b.rev, status: b.status, approved_rev: b.approved_rev, approved_at: b.approved_at, notes: b.notes, created: b.created, updated: b.updated, link: '/v/' + b.token };
-  if (full) Object.assign(o, { html: b.html, css: b.css, data: b.data ? JSON.parse(b.data) : null, base: STARTER.css });
+  const o = { id: b.id, title: b.title, project_id: b.project_id, rev: b.rev, status: b.status, approved_rev: b.approved_rev, approved_at: b.approved_at, notes: b.notes, created: b.created, updated: b.updated, link: '/v/' + b.token, shop: /data-nm-product/.test(b.html || '') ? '/s/' + b.token : '' };
+  if (full) Object.assign(o, { html: b.html, css: b.css, data: b.data ? JSON.parse(b.data) : null, base: STARTER.css, shopCss: SHOP_CSS });
   return o;
 }
 
@@ -89,9 +91,11 @@ export async function adminBuilds(req, env, id, sub, m, body, log, readRaw) {
       const project = clean(body.project_id, 80);
       let html = STARTER.html, css = STARTER.css;
       if (body.html) { html = cleanHtml(clean(body.html, MAX_DOC)); css = cleanCss(clean(body.css, MAX_DOC)); }
+      let data = '';
+      if (body.from) { const src = await get(clean(body.from, 40)); if (!src) return reply({ error: 'The build to copy could not be found.' }, 404); html = src.html; css = src.css; data = src.data || ''; }
       const bid = 'b_' + hex(6), t = now();
-      await env.DB.prepare('INSERT INTO builds (id, title, project_id, token, rev, html, css, data, created, updated) VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?)').bind(bid, title, project, hex(16), html, css, '', t, t).run();
-      await env.DB.prepare('INSERT INTO build_versions (build_id, rev, html, css, data, note, saved) VALUES (?, 1, ?, ?, ?, ?, ?)').bind(bid, html, css, '', 'Started', t).run();
+      await env.DB.prepare('INSERT INTO builds (id, title, project_id, token, rev, html, css, data, created, updated) VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, ?)').bind(bid, title, project, hex(16), html, css, data, t, t).run();
+      await env.DB.prepare('INSERT INTO build_versions (build_id, rev, html, css, data, note, saved) VALUES (?, 1, ?, ?, ?, ?, ?)').bind(bid, html, css, data, body.from ? 'Copied from another build' : 'Started', t).run();
       await log('Started a site build: ' + title);
       return reply({ ok: true, build: out(await get(bid)) });
     }
@@ -144,6 +148,7 @@ export async function adminBuilds(req, env, id, sub, m, body, log, readRaw) {
     await env.KV.put('bimg:' + key, buf, { metadata: { type } });
     return reply({ ok: true, src: '/b/img/' + key });
   }
+  if (sub === 'orders') return adminShopOrders(env, b.id, m);
   if (!sub && m === 'DELETE') {
     await env.DB.batch([env.DB.prepare('DELETE FROM build_versions WHERE build_id = ?').bind(b.id), env.DB.prepare('DELETE FROM builds WHERE id = ?').bind(b.id)]);
     await log('Deleted the site build ' + b.title); return reply({ ok: true });
@@ -174,7 +179,7 @@ export async function publicBuild(req, env, url) {
     return reply({ rev: b.rev, status: b.status, title: b.title, html: b.html, css: b.css }, 200, headers);
   }
   const page = `<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex, nofollow"><title>${esc(b.title)}: preview by NEMORA</title><link rel="stylesheet" href="/assets/viewer.css"><script src="/assets/viewer.js" defer></script></head>
-<body><div class="vbar"><span class="vdot" aria-hidden="true"></span><span class="vtitle">${esc(b.title)}</span><span class="vnote" id="vnote">Live preview: changes appear here as we make them</span></div>
+<body><div class="vbar"><span class="vdot" aria-hidden="true"></span><span class="vtitle">${esc(b.title)}</span><span class="vnote" id="vnote">Live preview: changes appear here as we make them</span>${/data-nm-product/.test(b.html || '') ? `<a class="vshop" href="/s/${mt[1]}" target="_blank" rel="noopener">Try the basket</a>` : ''}</div>
 <iframe id="site" title="${esc(b.title)} website preview" sandbox="allow-same-origin allow-popups" data-rev="0"></iframe></body></html>`;
   return new Response(page, { headers: { ...headers, 'Content-Type': 'text/html; charset=utf-8', 'X-Frame-Options': 'DENY' } });
 }

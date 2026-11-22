@@ -888,10 +888,11 @@ async function showBuilds() {
   file.addEventListener('change', async () => { fileText = file.files[0] ? await file.files[0].text() : null; });
   const f = form([
     { k: 'title', label: 'Name', placeholder: 'The business name', full: true },
-    { k: 'project_id', label: 'Project (optional)', type: 'select', options: [['', 'Not linked']].concat(projects.map(p => [p.id, p.title])) }
-  ], {}, { title: 'New site build', submit: 'Create and open', after: h('div', { class: 'field' }, h('label', {}, 'Start from a finished page (optional)'), h('span', { class: 'hint' }, 'An .html file with its styles inside. Leave empty to start from NEMORA\'s sections.'), file),
+    { k: 'project_id', label: 'Project (optional)', type: 'select', options: [['', 'Not linked']].concat(projects.map(p => [p.id, p.title])) },
+    { k: 'from', label: 'Start from', type: 'select', full: true, options: [['', 'NEMORA\'s sections']].concat(builds.map(b => [b.id, 'A copy of ' + b.title])) }
+  ], {}, { title: 'New site build', submit: 'Create and open', after: h('div', { class: 'field' }, h('label', {}, 'Or start from a finished page (optional)'), h('span', { class: 'hint' }, 'An .html file with its styles inside. For a shop, pick "A copy of Shop template" above instead.'), file),
     onSave: async v => {
-      const body = { title: v.title, project_id: v.project_id };
+      const body = { title: v.title, project_id: v.project_id, from: v.from && !fileText ? v.from : undefined };
       if (fileText) {
         const css = [...fileText.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi)].map(m => m[1]).join('\n');
         const bm = fileText.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
@@ -911,6 +912,7 @@ async function showBuilds() {
         h('a', { class: 'btn btn-sm btn-gold', href: '/admin/builder#' + b.id }, 'Open builder'),
         h('button', { class: 'btn btn-sm', onclick: e => copy(b, e.currentTarget) }, 'Copy client link'),
         h('a', { class: 'btn btn-sm', href: b.link, target: '_blank', rel: 'noopener' }, 'See client view'),
+        b.shop ? h('a', { class: 'btn btn-sm', href: b.shop, target: '_blank', rel: 'noopener' }, 'Try the shop') : null,
         (() => { const box = confirmBox('Delete this build and all its versions? The client link stops working.', 'Delete', async () => { if (await act(() => api('admin/builds/' + b.id, { method: 'DELETE' }), 'Deleted')) route(); }); return h('span', {}, h('button', { class: 'btn btn-sm btn-ghost', onclick: () => box.hidden = false }, 'Delete'), box); })()))))
       : empty('No site builds yet', 'Start one from NEMORA\'s sections, or from a finished page, then send the client their live link during the call.'));
 }
