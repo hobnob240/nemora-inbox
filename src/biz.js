@@ -6,6 +6,7 @@
 import { adminGame } from './game.js';
 import { adminSocial, SOCIAL_SCHEMA } from './social.js';
 import { adminAgents, agentAlerts, adminVillage } from './agents.js';
+import { adminDemos, DEMO_SCHEMA } from './demos.js';
 
 export const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS leads (id TEXT PRIMARY KEY, name TEXT NOT NULL, type TEXT NOT NULL DEFAULT '', area TEXT NOT NULL DEFAULT '', country TEXT NOT NULL DEFAULT 'UK', status TEXT NOT NULL DEFAULT 'check', channel TEXT NOT NULL DEFAULT '', legal TEXT NOT NULL DEFAULT '', email TEXT NOT NULL DEFAULT '', phone TEXT NOT NULL DEFAULT '', website TEXT NOT NULL DEFAULT '', address TEXT NOT NULL DEFAULT '', socials TEXT NOT NULL DEFAULT '', reviews INTEGER NOT NULL DEFAULT 0, fit INTEGER NOT NULL DEFAULT 0, package TEXT NOT NULL DEFAULT '', pitch TEXT NOT NULL DEFAULT '', notes TEXT NOT NULL DEFAULT '', next TEXT NOT NULL DEFAULT '', source TEXT NOT NULL DEFAULT '', found TEXT NOT NULL DEFAULT '', vetted TEXT NOT NULL DEFAULT '', updated TEXT NOT NULL DEFAULT '')`,
@@ -26,7 +27,8 @@ export const SCHEMA = [
   `CREATE INDEX IF NOT EXISTS checks_site ON checks(site_id, ts)`,
   `CREATE TABLE IF NOT EXISTS worklog (id INTEGER PRIMARY KEY AUTOINCREMENT, site_id TEXT NOT NULL, day TEXT NOT NULL, minutes INTEGER NOT NULL DEFAULT 0, kind TEXT NOT NULL DEFAULT 'change', what TEXT NOT NULL DEFAULT '', created TEXT NOT NULL DEFAULT '')`,
   `CREATE INDEX IF NOT EXISTS worklog_site ON worklog(site_id, day)`,
-  ...SOCIAL_SCHEMA
+  ...SOCIAL_SCHEMA,
+  ...DEMO_SCHEMA
 ];
 let ready = false;
 export async function ensureBizSchema(env) {
@@ -111,13 +113,14 @@ const plusDays = (iso, n) => { const d = new Date(iso + 'T12:00:00Z'); d.setUTCD
 // returns a Response, or null if the path isn't a business route
 export async function adminBiz(req, env, path, m, readJson, log, user, extra, role = 'owner') {
   const parts = path.split('/'), [res, id, sub] = parts;
-  if (!['dashboard', 'leads', 'outbox', 'clients', 'projects', 'invoices', 'reports', 'settings', 'rulebook', 'sites', 'worklog', 'cf', 'social', 'agents', 'village', 'game'].includes(res)) return null;
+  if (!['dashboard', 'leads', 'outbox', 'clients', 'projects', 'invoices', 'reports', 'settings', 'rulebook', 'sites', 'worklog', 'cf', 'social', 'agents', 'village', 'game', 'demos', 'replies'].includes(res)) return null;
   if (!env.DB) return reply({ error: 'The database is not connected. Add the D1 binding called DB in Cloudflare.' }, 503);
   await ensureBizSchema(env);
   try {
     const body = ['POST', 'PATCH', 'PUT'].includes(m) ? ((await readJson(req, 128 * 1024)) || {}) : {};
     if (res === 'dashboard' && m === 'GET') return reply(await dashboard(env, { ...extra, role }));
     if (res === 'leads') return await leads(env, id, sub, m, body, log, user);
+    if (res === 'demos' || res === 'replies') return await adminDemos(env, res, id, sub, m, body, log);
     if (res === 'outbox' && id && m === 'DELETE') {
       const o = await first(env, 'SELECT business FROM outbox WHERE id = ?', id); if (!o) return reply({ error: 'That queued email has already gone or been removed.' }, 404);
       await run(env, 'DELETE FROM outbox WHERE id = ?', id); await log('Cancelled a queued email to ' + o.business.slice(0, 40)); return reply({ ok: true });
@@ -154,7 +157,7 @@ export async function adminBiz(req, env, path, m, readJson, log, user, extra, ro
 async function dashboard(env, { unread, visitors, latestMessages, role }) {
   const t = today(), ms = monthStart(), ws = weekStart(), soon = plusDays(t, 7), ys = t.slice(0, 4) + '-01-01';
   const q = (sql, ...a) => env.DB.prepare(sql).bind(...a);
-  const [leadCounts, sentWeek, sentToday, moneyMonth, moneyYear, outstanding, overdue, recurring, stages, dueSoon, report, hotLeads, queued, recentSent, siteRows, socialRows] = await env.DB.batch([
+  const [leadCounts, sentWeek, sentToday, moneyMonth, moneyYear, outstanding, overdue, recurring, stages, dueSoon, report, hotLeads, queued, recentSent, siteRows, socialRows, newReplies, demoCounts, recentDemos] = await env.DB.batch([
     q('SELECT status, COUNT(*) AS n FROM leads GROUP BY status'),
     q('SELECT COUNT(*) AS n FROM sendlog WHERE sent_at >= ?', ws),
     q('SELECT COUNT(*) AS n FROM sendlog WHERE sent_at >= ?', t),
@@ -170,7 +173,10 @@ async function dashboard(env, { unread, visitors, latestMessages, role }) {
     q('SELECT COUNT(*) AS n FROM outbox'),
     q('SELECT business, kind, sent_at, lead_id FROM sendlog ORDER BY sent_at DESC LIMIT 5'),
     q("SELECT id, name, status, state, monitor, renews, down_since FROM sites WHERE status != 'retired'"),
-    q("SELECT status, COUNT(*) AS n FROM social_posts GROUP BY status")
+    q("SELECT status, COUNT(*) AS n FROM social_posts GROUP BY status"),
+    q("SELECT r.id, r.lead_id, r.demo_id, r.from_name, r.subject, r.body, r.received_at, COALESCE(NULLIF(r.business, ''), d.business, l.name, '') AS who FROM replies r LEFT JOIN demos d ON d.id = r.demo_id LEFT JOIN leads l ON l.id = r.lead_id WHERE r.status = 'new' ORDER BY r.received_at DESC LIMIT 8"),
+    q("SELECT status, COUNT(*) AS n FROM demos GROUP BY status"),
+    q("SELECT id, business, trade, area, url, status, sent_at FROM demos ORDER BY CASE WHEN sent_at = '' THEN 1 ELSE 0 END, sent_at DESC, created DESC LIMIT 4")
   ]);
   const sl = siteRows.results || [], soon30 = plusDays(t, 30);
   const one = r => (r.results && r.results[0]) || {};
@@ -183,6 +189,8 @@ async function dashboard(env, { unread, visitors, latestMessages, role }) {
     overdue: overdue.results || [], stages: by(stages), dueSoon: dueSoon.results || [], hotLeads: hotLeads.results || [], recentSent: recentSent.results || [],
     report: rep.id ? { ...rep, needs_you: parseJSON(rep.needs_you, []), highlights: parseJSON(rep.highlights, []) } : null,
     social: Object.fromEntries((socialRows.results || []).map(x => [x.status, x.n])),
+    newReplies: (newReplies.results || []).map(r => ({ ...r, body: String(r.body || '').slice(0, 220) })),
+    demos: { counts: by(demoCounts), recent: recentDemos.results || [] },
     agents: await agentAlerts(env, role).catch(() => []),
     sites: { total: sl.length, live: sl.filter(x => x.status === 'live').length, down: sl.filter(x => x.monitor && x.state === 'down').map(x => ({ id: x.id, name: x.name, since: x.down_since })), renewing: sl.filter(x => x.renews && x.renews <= soon30).map(x => ({ id: x.id, name: x.name, renews: x.renews })) }
   };
@@ -192,12 +200,13 @@ async function dashboard(env, { unread, visitors, latestMessages, role }) {
 async function leads(env, id, sub, m, body, log) {
   if (!id) {
     if (m === 'GET') {
-      const [rows, sent] = await Promise.all([
+      const [rows, sent, reps] = await Promise.all([
         all(env, 'SELECT id, name, type, area, country, status, channel, email, fit, package, next, reviews, found, updated FROM leads ORDER BY updated DESC, found DESC, name'),
-        all(env, 'SELECT lead_id, COUNT(*) AS n, MAX(sent_at) AS last FROM sendlog GROUP BY lead_id')
+        all(env, 'SELECT lead_id, COUNT(*) AS n, MAX(sent_at) AS last FROM sendlog GROUP BY lead_id'),
+        all(env, "SELECT lead_id, COUNT(*) AS n, SUM(CASE WHEN status = 'new' THEN 1 ELSE 0 END) AS unread, MAX(received_at) AS last FROM replies WHERE lead_id != '' GROUP BY lead_id")
       ]);
-      const s = Object.fromEntries(sent.map(r => [r.lead_id, r]));
-      return reply({ leads: rows.map(r => ({ ...r, sent: (s[r.id] || {}).n || 0, lastSent: (s[r.id] || {}).last || '' })) });
+      const s = Object.fromEntries(sent.map(r => [r.lead_id, r])), rp = Object.fromEntries(reps.map(r => [r.lead_id, r]));
+      return reply({ leads: rows.map(r => ({ ...r, sent: (s[r.id] || {}).n || 0, lastSent: (s[r.id] || {}).last || '', replies: (rp[r.id] || {}).n || 0, unread: (rp[r.id] || {}).unread || 0, lastReply: (rp[r.id] || {}).last || '' })) });
     }
     if (m === 'POST') {
       const v = clean('leads', body);
@@ -234,13 +243,16 @@ async function leads(env, id, sub, m, body, log) {
     return reply({ ok: true, client: cid });
   }
   if (m === 'GET') {
-    const [sent, queued, project, client] = await Promise.all([
+    const [sent, queued, project, client, replies, demos] = await Promise.all([
       all(env, 'SELECT id, subject, kind, sent_at, to_email FROM sendlog WHERE lead_id = ? ORDER BY sent_at DESC', id),
       all(env, 'SELECT id, subject, body, kind, slot, not_before, to_email FROM outbox WHERE lead_id = ? ORDER BY not_before', id),
       first(env, 'SELECT id, title, stage, preview_url FROM projects WHERE lead_id = ?', id),
-      first(env, 'SELECT id, name FROM clients WHERE lead_id = ?', id)
+      first(env, 'SELECT id, name FROM clients WHERE lead_id = ?', id),
+      all(env, 'SELECT * FROM replies WHERE lead_id = ? ORDER BY received_at DESC', id),
+      all(env, 'SELECT id, business, url, status, sent_at FROM demos WHERE lead_id = ?', id)
     ]);
-    return reply({ lead, sent, queued, project, client });
+    if (replies.some(r => r.status === 'new')) await run(env, "UPDATE replies SET status = 'seen' WHERE lead_id = ? AND status = 'new'", id);
+    return reply({ lead, sent, queued, project, client, replies, demos });
   }
   if (m === 'PATCH') {
     const v = clean('leads', body, true);
@@ -251,7 +263,7 @@ async function leads(env, id, sub, m, body, log) {
   }
   if (m === 'DELETE') {
     // erase a lead completely (e.g. a data-deletion request)
-    await env.DB.batch([env.DB.prepare('DELETE FROM outbox WHERE lead_id = ?').bind(id), env.DB.prepare('DELETE FROM sendlog WHERE lead_id = ?').bind(id), env.DB.prepare('DELETE FROM leads WHERE id = ?').bind(id), env.DB.prepare("UPDATE projects SET lead_id = '' WHERE lead_id = ?").bind(id), env.DB.prepare("UPDATE clients SET lead_id = '' WHERE lead_id = ?").bind(id)]);
+    await env.DB.batch([env.DB.prepare('DELETE FROM outbox WHERE lead_id = ?').bind(id), env.DB.prepare('DELETE FROM sendlog WHERE lead_id = ?').bind(id), env.DB.prepare('DELETE FROM replies WHERE lead_id = ?').bind(id), env.DB.prepare("UPDATE demos SET lead_id = '' WHERE lead_id = ?").bind(id), env.DB.prepare('DELETE FROM leads WHERE id = ?').bind(id), env.DB.prepare("UPDATE projects SET lead_id = '' WHERE lead_id = ?").bind(id), env.DB.prepare("UPDATE clients SET lead_id = '' WHERE lead_id = ?").bind(id)]);
     await log('Deleted lead ' + lead.name.slice(0, 40)); return reply({ ok: true });
   }
   return reply({ error: 'Not found.' }, 404);

@@ -55,6 +55,7 @@ const ICONS = {
   print: 'M6 9V2h12v7|M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2|M6 14h12v8H6z',
   user: 'M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2|M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z',
   shield: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',
+  demos: 'M3 4h18v12H3z|M8 20h8|M12 16v4', demo: 'M3 4h18v12H3z|M8 20h8|M12 16v4', reply: 'M9 17l-5-5 5-5|M4 12h11a5 5 0 0 1 5 5v2', replies: 'M9 17l-5-5 5-5|M4 12h11a5 5 0 0 1 5 5v2',
   trash: 'M3 6h18|M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2'
 };
 function icon(name, cls) { return s('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.8', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true', class: cls || '' }, ...ICONS[name].split('|').map(d => s('path', { d }))); }
@@ -157,11 +158,11 @@ const tag = (map, k) => pill((map[k] || [k])[0], (map[k] || [])[1]);
 
 /* ================= shell ================= */
 const NAV = [['home', 'Home'], ['inbox', 'Inbox'], ['leads', 'Leads'], ['sites', 'Sites'], ['work', 'Work'], ['money', 'Money']];
-const SIDE = [['home', 'Home'], ['village', 'Village'], ['agents', 'Agents'], ['inbox', 'Inbox'], ['leads', 'Leads'], ['social', 'Social'], ['sites', 'Sites'], ['builds', 'Builder'], ['work', 'Work'], ['money', 'Money']];
+const SIDE = [['home', 'Home'], ['village', 'Village'], ['agents', 'Agents'], ['inbox', 'Inbox'], ['leads', 'Leads'], ['demos', 'Demos'], ['social', 'Social'], ['sites', 'Sites'], ['builds', 'Builder'], ['work', 'Work'], ['money', 'Money']];
 const NAV_MORE = [['visitors', 'Visitors'], ['settings', 'Settings']];
-const MENU = [['village', 'Village'], ['agents', 'Agents'], ['builds', 'Builder'], ['social', 'Social'], ['visitors', 'Visitors'], ['settings', 'Settings']];
-const SECTION = { village: 'village', play: 'village', builds: 'builds', agents: 'agents', agent: 'agents', social: 'social', post: 'social', sites: 'sites', site: 'sites', inbox: 'inbox', leads: 'leads', lead: 'leads', work: 'work', project: 'work', client: 'work', clients: 'work', money: 'money', invoice: 'money', visitors: 'visitors', settings: 'settings', activity: 'settings', home: 'home' };
-const TITLES = { village: 'Village', builds: 'Builder', agents: 'Agents', social: 'Social', sites: 'Sites', home: 'Home', inbox: 'Inbox', leads: 'Leads', work: 'Work', money: 'Money', visitors: 'Visitors', settings: 'Settings' };
+const MENU = [['demos', 'Demos'], ['replies', 'Replies'], ['village', 'Village'], ['agents', 'Agents'], ['builds', 'Builder'], ['social', 'Social'], ['visitors', 'Visitors'], ['settings', 'Settings']];
+const SECTION = { village: 'village', play: 'village', builds: 'builds', agents: 'agents', agent: 'agents', social: 'social', post: 'social', sites: 'sites', site: 'sites', inbox: 'inbox', leads: 'leads', lead: 'leads', replies: 'leads', demos: 'demos', demo: 'demos', work: 'work', project: 'work', client: 'work', clients: 'work', money: 'money', invoice: 'money', visitors: 'visitors', settings: 'settings', activity: 'settings', home: 'home' };
+const TITLES = { village: 'Village', builds: 'Builder', agents: 'Agents', social: 'Social', sites: 'Sites', demos: 'Demos', home: 'Home', inbox: 'Inbox', leads: 'Leads', work: 'Work', money: 'Money', visitors: 'Visitors', settings: 'Settings' };
 let me = { username: '', role: 'owner', name: '', unread: 0 };
 function shell() {
   $('#side-nav').replaceChildren(...SIDE.map(([k, l]) => h('a', { href: '#' + k, 'data-k': k }, icon(k), l, k === 'inbox' ? h('span', { class: 'count', hidden: true }) : null)), h('div', { class: 'sep' }), ...NAV_MORE.map(([k, l]) => h('a', { href: '#' + k, 'data-k': k }, icon(k), l)));
@@ -176,7 +177,7 @@ function shell() {
   $('#logout-side').onclick = logout;
 }
 function markNav(section) {
-  document.querySelectorAll('[data-k]').forEach(a => { if (a.dataset.k === section) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
+  document.querySelectorAll('[data-k]').forEach(a => { if (a.dataset.k === section || (section === 'demos' && a.dataset.k === 'leads' && a.closest('#tabbar'))) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
   document.querySelectorAll('#side-nav .count, #tabbar .dot').forEach(b => { b.hidden = !me.unread; b.textContent = me.unread > 99 ? '99+' : String(me.unread); });
   $('#menu').hidden = true;
   document.title = (TITLES[section] || 'Admin') + ' | NEMORA';
@@ -193,6 +194,7 @@ async function route() {
   render(h('div', { class: 'skeleton' }), h('div', { class: 'skeleton' }));
   const pages = {
     home: showHome, inbox: id ? () => showMessage(id) : showInbox, leads: showLeads, lead: () => showLead(id),
+    demos: showDemos, demo: () => showDemo(id), replies: showReplies,
     work: () => showWork('projects'), clients: () => showWork('clients'),
     project: () => id === 'new' ? editProject(null, extra) : showProject(id), client: () => id === 'new' ? editClient(null) : showClient(id),
     builds: showBuilds, village: () => showVillage(id), play: () => showVillage(null, true),
@@ -218,7 +220,8 @@ async function showHome() {
   const todo = [];
   if (d.unread) todo.push(['#inbox', 'inbox', '', plural(d.unread, 'new message'), 'From the contact form on nemora.uk']);
   for (const i of d.overdue) todo.push(['#invoice/' + i.id, 'alert', 'bad', `${i.business || i.name || 'A client'} owes ${money(i.total_pence)}`, `Invoice ${i.number} was due ${day(i.due)}`]);
-  for (const l of d.hotLeads) todo.push(['#lead/' + l.id, 'star', 'ok', `${l.name} ${l.status === 'interested' ? 'is interested' : 'replied'}`, l.next || [l.type, l.area].filter(Boolean).join(' · ')]);
+  for (const r of d.newReplies || []) todo.unshift([r.demo_id ? '#demo/' + r.demo_id : r.lead_id ? '#lead/' + r.lead_id : '#replies', 'reply', 'ok', `${r.who || r.from_name || 'Someone'} replied`, r.body]);
+  for (const l of d.hotLeads) if (!(d.newReplies || []).some(r => r.lead_id === l.id)) todo.push(['#lead/' + l.id, 'star', 'ok', `${l.name} ${l.status === 'interested' ? 'is interested' : 'replied'}`, l.next || [l.type, l.area].filter(Boolean).join(' · ')]);
   for (const p of d.dueSoon) todo.push(['#project/' + p.id, 'clock', p.due < d.today ? 'bad' : '', `${p.title} ${p.due < d.today ? 'was due' : 'is due'} ${day(p.due)}`, (STAGE[p.stage] || [p.stage])[0]]);
   const so = d.social || {};
   if (so.needs_approval) todo.unshift(['#social', 'play', '', plural(so.needs_approval, 'video') + ' waiting for your OK', 'Social posts for Facebook and Instagram']);
@@ -256,6 +259,11 @@ async function showHome() {
       card('Projects', stagesActive.length || d.dueSoon.length ? [h('div', { class: 'actions' }, stagesActive.map(k => h('a', { href: '#work', class: 'pill ' + STAGE[k][1] }, STAGE[k][0] + ' · ' + d.stages[k]))),
         d.dueSoon.length ? h('div', { class: 'list' }, d.dueSoon.map(p => h('a', { class: 'row', href: '#project/' + p.id }, h('span', { class: 'body' }, h('span', { class: 't' }, p.title), h('span', { class: 's' }, p.business || p.name || '')), h('span', { class: 'end' }, h('span', { class: 'when' }, 'Due ' + day(p.due)))))) : null]
         : empty('No projects yet', 'When a lead says yes, turn them into a client and their project shows up here.'), h('a', { href: '#work' }, 'All work'))),
+    h('div', { class: 'grid g2' },
+      card('Demos sent', (d.demos && d.demos.recent.length) ? [h('div', { class: 'list' }, d.demos.recent.map(x => h('a', { class: 'row', href: '#demo/' + x.id }, h('span', { class: 'avatar-sm', 'aria-hidden': 'true' }, initials(x.business)), h('span', { class: 'body' }, h('span', { class: 't' }, x.business), h('span', { class: 's' }, [x.trade, x.area].filter(Boolean).join(' · '))), h('span', { class: 'end' }, tag(DEMO, x.status), h('span', { class: 'when' }, x.sent_at ? (new Date(x.sent_at) > new Date() ? 'Goes ' + day(x.sent_at) : ago(x.sent_at)) : ''))))),
+        h('p', { class: 'small muted' }, `${num(Object.entries(d.demos.counts).filter(([k]) => !['building', 'scheduled'].includes(k)).reduce((a, [, n]) => a + n, 0))} sent · ${num((d.demos.counts.replied || 0) + (d.demos.counts.interested || 0) + (d.demos.counts.won || 0))} replied`)]
+        : empty('No demos yet', 'Demo sites sent to prospects show up here.'), h('a', { href: '#demos' }, 'All demos')),
+      card('Replies', (d.newReplies || []).length ? h('div', { class: 'list' }, d.newReplies.slice(0, 4).map(r => replyRow({ ...r, status: 'new' }))) : empty('Nothing new', 'Replies to outreach and demo emails land here.'), h('a', { href: '#replies' }, 'All replies'))),
     h('div', { class: 'grid g2' },
       card('Latest messages', d.latestMessages && d.latestMessages.length ? h('div', { class: 'list' }, d.latestMessages.map(msgRow)) : empty('No messages yet', 'Messages from the contact form on nemora.uk land here.'), h('a', { href: '#inbox' }, 'Inbox')),
       card('Visitors', v ? [h('div', { class: 'live' }, h('span', { class: 'pulse', 'aria-hidden': 'true' }), h('span', {}, h('strong', {}, num(v.live)), ' on nemora.uk in the last 30 minutes')), chart(v.series, 7, v.from, true)] : empty('Visitor stats are off'), h('a', { href: '#visitors' }, 'Details'))));
@@ -303,11 +311,140 @@ async function showMessage(id) {
           h('button', { class: 'btn btn-sm btn-danger', onclick: () => del.hidden = false }, 'Delete')), del]))));
 }
 
+/* ================= outreach: demos and replies ================= */
+const DEMO = { building: ['Building', 'warn'], scheduled: ['Scheduled', 'info'], sent: ['Sent', 'gold'], replied: ['Replied', 'warn'], interested: ['Interested', 'ok'], won: ['Client', 'ok'], declined: ['Said no', ''], quiet: ['No reply', ''] };
+const REPLY = { new: ['New', 'warn'], seen: ['Read', 'info'], done: ['Dealt with', 'ok'] };
+const hostPath = u => { try { const x = new URL(u); return (x.host + x.pathname).replace(/\/$/, ''); } catch (e) { return u; } };
+// the three outreach views share one switcher so they read as one area
+function outreachTabs(current, counts = {}) {
+  return h('nav', { class: 'seg', 'aria-label': 'Outreach' }, [['leads', 'Leads'], ['demos', 'Demos'], ['replies', 'Replies']].map(([k, l]) =>
+    h('a', { href: '#' + k, class: current === k ? 'on' : '', 'aria-current': current === k ? 'page' : null }, l, counts[k] ? h('span', { class: 'n' + (k === 'replies' ? ' hot' : '') }, num(counts[k])) : null)));
+}
+async function outreachCounts() {
+  try { const d = await api('admin/replies'); return { replies: d.replies.filter(r => r.status === 'new').length }; } catch (e) { return {}; }
+}
+const replyRow = r => h('a', { class: 'row' + (r.status === 'new' ? ' unread' : ''), href: r.demo_id ? '#demo/' + r.demo_id : r.lead_id ? '#lead/' + r.lead_id : '#replies/' + r.id },
+  h('span', { class: 'avatar-sm', 'aria-hidden': 'true' }, initials(r.who || r.from_name || r.from_email)),
+  h('span', { class: 'body' }, h('span', { class: 't' }, r.who || r.from_name || r.from_email || 'Someone', r.from_name && r.who && r.from_name !== r.who ? h('span', { class: 'muted' }, '· ' + r.from_name) : null), h('span', { class: 'x' }, r.body)),
+  h('span', { class: 'end' }, h('span', { class: 'when' }, when(r.received_at)), r.demo_id ? pill('Demo', 'gold') : r.lead_id ? pill('Lead', 'info') : null));
+
+function replyCard(r) {
+  const setSt = async st => { if (await act(() => api('admin/replies/' + r.id, { method: 'PATCH', body: { status: st } }), st === 'done' ? 'Marked as dealt with' : 'Marked as read')) route(); };
+  const del = confirmBox('Delete this reply?', 'Delete', async () => { if (await act(() => api('admin/replies/' + r.id, { method: 'DELETE' }), 'Deleted')) route(); });
+  return h('article', { class: 'reply' + (r.status === 'new' ? ' is-new' : '') },
+    h('div', { class: 'reply-top' }, h('strong', {}, r.from_name || r.from_email || 'Reply'), r.from_name && r.from_email ? h('span', { class: 'muted small' }, r.from_email) : null, h('span', { class: 'grow' }), tag(REPLY, r.status), h('span', { class: 'when' }, full(r.received_at))),
+    r.subject ? h('span', { class: 'small muted' }, r.subject) : null,
+    h('div', { class: 'quote' }, r.body),
+    h('div', { class: 'actions' },
+      r.from_email ? h('a', { class: 'btn btn-sm btn-gold', href: `mailto:${r.from_email}?subject=${encodeURIComponent('Re: ' + (r.subject || 'your website'))}` }, icon('mail'), 'Reply') : null,
+      r.status === 'new' ? h('button', { class: 'btn btn-sm', onclick: () => setSt('seen') }, 'Mark read') : null,
+      r.status !== 'done' ? h('button', { class: 'btn btn-sm', onclick: () => setSt('done') }, icon('check'), 'Dealt with') : null,
+      h('button', { class: 'btn btn-sm btn-ghost', onclick: () => del.hidden = false }, 'Delete')), del);
+}
+// paste a reply in by hand (Claude adds them automatically from the outreach inbox)
+function logReplyForm(link, defaults = {}) {
+  const f = form([
+    { k: 'from_name', label: 'Their name', value: defaults.from_name || '' }, { k: 'from_email', label: 'Their email', type: 'email', value: defaults.from_email || '' },
+    { k: 'body', label: 'What they said', type: 'textarea', rows: 5, placeholder: 'Paste their reply here' },
+    { k: 'received_at', label: 'When', type: 'datetime-local', value: new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) }
+  ], {}, { title: 'Log a reply', submit: 'Save reply', onCancel: () => { f.el.hidden = true; },
+    onSave: async v => { await api('admin/replies', { method: 'POST', body: { ...v, ...link, received_at: v.received_at ? new Date(v.received_at).toISOString() : '' } }); toast('Reply saved'); route(); } });
+  f.el.hidden = true;
+  return f;
+}
+
+let demoFilter = 'all';
+const DEMO_GROUPS = [['all', 'All', () => true], ['waiting', 'Waiting', d => ['sent', 'scheduled'].includes(d.status)], ['replied', 'Replied', d => ['replied', 'interested', 'won'].includes(d.status) || d.replies], ['building', 'Building', d => d.status === 'building'], ['closed', 'Closed', d => ['declined', 'quiet'].includes(d.status)]];
+async function showDemos() {
+  const [{ demos }, counts] = await Promise.all([api('admin/demos'), outreachCounts()]);
+  const n = ks => demos.filter(d => ks.includes(d.status)).length;
+  const groups = DEMO_GROUPS.filter(([k, , f]) => k === 'all' || k === demoFilter || demos.some(f));
+  const list = demos.filter((DEMO_GROUPS.find(g => g[0] === demoFilter) || DEMO_GROUPS[0])[2]);
+  const pick = k => { demoFilter = k; showDemos(); };
+  render(
+    pageHead('Outreach', 'Demos', 'Every demo site built and sent to a prospect. New ones appear here as soon as the email goes out.', [h('a', { class: 'btn', href: '#demo/new' }, icon('plus'), 'Add demo')]),
+    outreachTabs('demos', counts),
+    h('div', { class: 'tiles' },
+      tile('Demos sent', num(n(['sent', 'replied', 'interested', 'won', 'declined', 'quiet'])), n(['scheduled']) ? plural(n(['scheduled']), 'email') + ' scheduled' : n(['building']) ? num(n(['building'])) + ' being built' : 'All sent', '', null),
+      tile('Waiting to hear', num(n(['sent'])), n(['sent']) ? 'Sent, no reply yet' : ''),
+      tile('Replied', num(demos.filter(DEMO_GROUPS[2][2]).length), demos.some(d => d.unread) ? h('span', { class: 'delta up' }, plural(demos.filter(d => d.unread).length, 'unread reply', 'unread replies')) : ''),
+      tile('Clients', num(n(['won'])), num(n(['interested'])) + ' interested', 'hero')),
+    chipsRow(groups.map(([k, l, f]) => [k, l, demos.filter(f).length]), demoFilter, pick),
+    list.length ? h('div', { class: 'demo-grid' }, list.map(demoCard)) : empty(demos.length ? 'Nothing here' : 'No demos yet', demos.length ? null : 'When a demo site goes out to a prospect it shows up here, with the link and any reply.'));
+}
+function demoCard(d) {
+  const link = safeHref(d.url);
+  return h('article', { class: 'demo' + (d.unread ? ' has-new' : '') },
+    h('a', { class: 'demo-main', href: '#demo/' + d.id },
+      h('span', { class: 'demo-top' }, tag(DEMO, d.status), d.unread ? pill(plural(d.unread, 'new reply', 'new replies'), 'warn') : d.replies ? pill(plural(d.replies, 'reply', 'replies'), '') : null),
+      h('strong', { class: 'demo-name' }, d.business),
+      h('span', { class: 'demo-meta' }, [d.trade, d.area].filter(Boolean).join(' · ')),
+      d.idea ? h('span', { class: 'demo-idea' }, d.idea) : null,
+      h('span', { class: 'demo-when' }, icon(d.status === 'scheduled' ? 'clock' : 'mail'), d.sent_at ? (d.status === 'scheduled' || new Date(d.sent_at) > new Date() ? 'Goes out ' + full(d.sent_at) : 'Sent ' + ago(d.sent_at)) : 'Not sent yet', d.contact ? ' to ' + d.contact : '')),
+    h('div', { class: 'demo-actions' },
+      link ? h('a', { class: 'btn btn-sm', href: link, target: '_blank', rel: 'noopener noreferrer' }, icon('link'), 'Open demo') : null,
+      link ? h('button', { class: 'btn btn-sm btn-ghost', onclick: () => copy(link, 'Link') }, icon('copy'), 'Copy link') : null));
+}
+const DEMO_FIELDS = [
+  { k: 'business', label: 'Business name' }, { k: 'contact', label: 'Who it went to', placeholder: 'e.g. Chloe' },
+  { k: 'trade', label: 'Trade', placeholder: 'e.g. Roofer' }, { k: 'area', label: 'Area', placeholder: 'e.g. Stafford' },
+  { k: 'url', label: 'Demo link', type: 'url', full: true, placeholder: 'https://nemora.uk/demos/…' },
+  { k: 'email', label: 'Their email', type: 'email' }, { k: 'phone', label: 'Their phone' },
+  { k: 'facebook', label: 'Facebook page', type: 'url', full: true },
+  { k: 'status', label: 'Status', type: 'select', options: Object.entries(DEMO).map(([k, v]) => [k, v[0]]), value: 'sent' },
+  { k: 'sent_at', label: 'Sent', type: 'datetime-local' },
+  { k: 'subject', label: 'Email subject', full: true }, { k: 'idea', label: 'The design idea', type: 'textarea', rows: 2 }, { k: 'notes', label: 'Notes', type: 'textarea' }];
+const toLocalInput = iso => iso ? new Date(new Date(iso).getTime() - new Date(iso).getTimezoneOffset() * 60000).toISOString().slice(0, 16) : '';
+function demoForm(d) {
+  return form(DEMO_FIELDS, d ? { ...d, sent_at: toLocalInput(d.sent_at) } : { sent_at: toLocalInput(new Date().toISOString()) }, { title: d ? 'Edit demo' : 'New demo', submit: d ? 'Save' : 'Add demo', onCancel: () => d ? route() : go('demos'),
+    onSave: async v => { v.sent_at = v.sent_at ? new Date(v.sent_at).toISOString() : ''; if (d) { await api('admin/demos/' + d.id, { method: 'PATCH', body: v }); toast('Saved'); route(); } else { const r = await api('admin/demos', { method: 'POST', body: v }); toast('Demo added'); go('demo/' + r.id); } } });
+}
+async function showDemo(id) {
+  if (id === 'new') { render(pageHead('Outreach', 'Add a demo', null, null, ['demos', 'Demos']), demoForm(null).el); return; }
+  const { demo: d, replies, lead } = await api('admin/demos/' + id);
+  const link = safeHref(d.url), fb = safeHref(d.facebook);
+  const statusSel = h('select', { 'aria-label': 'Status', onchange: async e => { if (await act(() => api('admin/demos/' + id, { method: 'PATCH', body: { status: e.target.value } }), 'Status updated')) route(); } }, Object.entries(DEMO).map(([k, v]) => h('option', { value: k, selected: k === d.status }, v[0])));
+  const notes = h('textarea', { rows: 4, 'aria-label': 'Notes' }, d.notes);
+  const lf = logReplyForm({ demo_id: d.id, lead_id: d.lead_id, business: d.business }, { from_name: d.contact, from_email: d.email });
+  const del = confirmBox('Remove this demo from the list? The demo site itself stays online.', 'Remove', async () => { if (await act(() => api('admin/demos/' + id, { method: 'DELETE' }), 'Removed')) go('demos'); });
+  render(
+    pageHead([d.trade, d.area].filter(Boolean).join(' · ') || 'Demo', d.business, null, [tag(DEMO, d.status), h('button', { class: 'btn btn-sm', onclick: () => render(pageHead('Outreach', 'Edit demo', null, null, ['demo/' + id, d.business]), demoForm(d).el) }, 'Edit')], ['demos', 'Demos']),
+    h('div', { class: 'grid side-r' },
+      h('div', { class: 'grid' },
+        link ? h('a', { class: 'demo-hero', href: link, target: '_blank', rel: 'noopener noreferrer' }, h('span', { class: 'demo-hero-k' }, 'The demo'), h('strong', {}, hostPath(link)), h('span', { class: 'demo-hero-go' }, 'Open it', icon('link'))) : null,
+        card('Replies', [
+          replies.length ? h('div', { class: 'replies' }, replies.map(replyCard)) : h('p', { class: 'muted small' }, d.status === 'scheduled' ? 'The email hasn\'t gone out yet.' : 'No reply yet. Replies show up here as soon as they come in.'),
+          h('div', { class: 'actions' }, h('button', { class: 'btn btn-sm', onclick: () => { lf.el.hidden = false; lf.els.body.focus(); } }, icon('plus'), 'Log a reply by hand')), lf.el]),
+        d.idea ? card('The design idea', h('p', { class: 'prose' }, d.idea)) : null),
+      h('div', { class: 'grid' },
+        card('Status', [statusSel, h('div', { class: 'kvs' }, kv('Sent', d.sent_at ? full(d.sent_at) : 'Not yet'), kv('Subject', d.subject))]),
+        card('Contact', h('div', { class: 'kvs' },
+          kv('Name', d.contact),
+          kv('Email', d.email, d.email ? h('a', { class: 'btn btn-sm', href: 'mailto:' + d.email }, 'Email') : null),
+          kv('Phone', d.phone, /[0-9]{6}/.test(d.phone.replace(/\s/g, '')) ? h('a', { class: 'btn btn-sm', href: tel(d.phone) }, 'Call') : null),
+          kv('Facebook', fb ? 'Page' : '', fb ? h('a', { class: 'btn btn-sm', href: fb, target: '_blank', rel: 'noopener noreferrer' }, 'Open') : null),
+          kv('Lead', lead ? h('a', { href: '#lead/' + lead.id }, lead.name) : ''))),
+        card('Notes', [notes, h('div', { class: 'actions' }, h('button', { class: 'btn btn-sm', onclick: () => act(() => api('admin/demos/' + id, { method: 'PATCH', body: { notes: notes.value } }), 'Notes saved') }, 'Save notes'))]),
+        card(null, [h('div', { class: 'actions' }, h('button', { class: 'btn btn-sm btn-danger', onclick: () => del.hidden = false }, icon('trash'), 'Remove demo')), del]))));
+}
+
+let replyFilter = 'new';
+async function showReplies() {
+  const { replies } = await api('admin/replies');
+  const c = { new: replies.filter(r => r.status === 'new').length, all: replies.length };
+  const list = replyFilter === 'new' ? replies.filter(r => r.status === 'new') : replies;
+  render(
+    pageHead('Outreach', 'Replies', 'Everyone who has written back to an outreach or demo email. Tap one to see the full conversation.'),
+    outreachTabs('replies', { replies: c.new }),
+    chipsRow([['new', 'New', c.new], ['all', 'All', c.all]], replyFilter, k => { replyFilter = k; showReplies(); }),
+    list.length ? card(null, h('div', { class: 'list' }, list.map(replyRow))) : empty(replyFilter === 'new' ? 'You\'re up to date' : 'No replies yet', replyFilter === 'new' && replies.length ? 'Nothing new. Older replies are under All.' : 'When someone writes back to an outreach email, it shows up here.'));
+}
+
 /* ================= leads ================= */
 let leadFilter = 'active', leadSearch = '';
-const LEAD_GROUPS = [['active', 'Active', l => !['dnc', 'lost', 'won', 'hold'].includes(l.status)], ['hot', 'Replied', l => ['replied', 'interested'].includes(l.status)], ['ready', 'Ready to email', l => l.status === 'ready'], ['contacted', 'Contacted', l => ['contacted', 'followup'].includes(l.status)], ['check', 'To check', l => l.status === 'check'], ['hold', 'On hold', l => l.status === 'hold'], ['won', 'Clients', l => l.status === 'won'], ['closed', 'Closed', l => ['lost', 'dnc'].includes(l.status)], ['all', 'All', () => true]];
+const LEAD_GROUPS = [['active', 'Active', l => !['dnc', 'lost', 'won', 'hold'].includes(l.status)], ['hot', 'Replied', l => ['replied', 'interested'].includes(l.status) || l.replies > 0], ['ready', 'Ready to email', l => l.status === 'ready'], ['contacted', 'Contacted', l => ['contacted', 'followup'].includes(l.status)], ['check', 'To check', l => l.status === 'check'], ['hold', 'On hold', l => l.status === 'hold'], ['won', 'Clients', l => l.status === 'won'], ['closed', 'Closed', l => ['lost', 'dnc'].includes(l.status)], ['all', 'All', () => true]];
 async function showLeads() {
-  const { leads } = await api('admin/leads');
+  const [{ leads }, counts0] = await Promise.all([api('admin/leads'), outreachCounts()]);
   const listEl = h('div', { class: 'list' });
   const draw = () => {
     const g = LEAD_GROUPS.find(x => x[0] === leadFilter) || LEAD_GROUPS[0];
@@ -316,21 +453,26 @@ async function showLeads() {
     listEl.replaceChildren(...(rows.length ? rows.map(l => h('a', { class: 'row', href: '#lead/' + l.id },
       h('span', { class: 'avatar-sm', 'aria-hidden': 'true' }, initials(l.name)),
       h('span', { class: 'body' }, h('span', { class: 't' }, l.name, l.fit ? fitDots(l.fit) : null), h('span', { class: 's' }, [l.type, l.area, l.package].filter(Boolean).join(' · ')), l.next ? h('span', { class: 'x' }, l.next) : null),
-      h('span', { class: 'end' }, tag(LEAD, l.status), l.sent ? h('span', { class: 'when' }, plural(l.sent, 'email')) : null))) : [empty('No leads here', q ? 'Try a different search.' : null)]));
+      h('span', { class: 'end' }, tag(LEAD, l.status), l.replies ? pill(plural(l.replies, 'reply', 'replies'), l.unread ? 'warn' : '') : l.sent ? h('span', { class: 'when' }, plural(l.sent, 'email')) : null))) : [empty('No leads here', q ? 'Try a different search.' : null)]));
   };
   const counts = Object.fromEntries(LEAD_GROUPS.map(([k, , f]) => [k, leads.filter(f).length]));
   const search = h('input', { type: 'search', placeholder: 'Search leads', value: leadSearch, 'aria-label': 'Search leads', oninput: e => { leadSearch = e.target.value; draw(); } });
   let chipsEl;
+  const pick = k => { leadFilter = k; const n = chips(); chipsEl.replaceWith(n); chipsEl = n; draw(); listEl.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' }); };
   const chips = () => chipsRow(LEAD_GROUPS.filter(([k]) => counts[k] || k === 'active' || k === leadFilter).map(([k, l]) => [k, l, counts[k]]), leadFilter, k => { leadFilter = k; const n = chips(); chipsEl.replaceWith(n); chipsEl = n; draw(); });
   chipsEl = chips();
   const sum = ks => leads.filter(l => ks.includes(l.status)).length;
+  // every tile is a shortcut: tap it to see exactly who is behind the number
+  const tileBtn = (k, label, v, n, cls) => h('button', { type: 'button', class: 'tile tile-btn ' + (cls || '') + (leadFilter === k ? ' on' : ''), onclick: () => pick(k), 'aria-label': `${label}: ${v}. Show them` }, h('span', { class: 'tile-k' }, label), h('strong', { class: 'tile-v' }, v), h('span', { class: 'tile-n' }, n || ''));
+  const unread = leads.filter(l => l.unread).length;
   render(
-    pageHead('Outreach', 'Leads', 'Businesses your outreach assistant has found and contacted. It keeps these up to date; you can change anything.', [h('a', { class: 'btn', href: '#lead/new' }, icon('plus'), 'Add lead')]),
+    pageHead('Outreach', 'Leads', 'Businesses found and emailed by outreach. Tap a number to see who it is.', [h('a', { class: 'btn', href: '#lead/new' }, icon('plus'), 'Add lead')]),
+    outreachTabs('leads', counts0),
     h('div', { class: 'tiles' },
-      tile('Leads', num(leads.length), `${num(sum(['ready']))} ready to email`),
-      tile('Contacted', num(sum(['contacted', 'followup', 'replied', 'interested', 'won'])), `${num(sum(['check']))} to check`),
-      tile('Replied', num(sum(['replied', 'interested', 'won']))),
-      tile('Interested', num(sum(['interested', 'won'])), `${num(sum(['won']))} became clients`, 'hero')),
+      tileBtn('ready', 'Ready to email', num(sum(['ready'])), `${num(sum(['check']))} still to check`),
+      tileBtn('contacted', 'Emailed', num(sum(['contacted', 'followup'])), `${num(leads.reduce((a, l) => a + (l.sent || 0), 0))} emails in total`),
+      tileBtn('hot', 'Replied', num(counts.hot), unread ? h('span', { class: 'delta up' }, plural(unread, 'unread reply', 'unread replies')) : counts.hot ? 'Tap to read' : 'No replies yet'),
+      tileBtn('won', 'Clients', num(sum(['won'])), `${num(sum(['interested']))} interested`, 'hero')),
     h('div', { class: 'search' }, icon('search'), search), chipsEl,
     card(null, listEl));
   draw();
@@ -349,7 +491,8 @@ async function showLead(id) {
     render(pageHead('Outreach', 'Add a lead', 'Your outreach assistant only emails limited companies with a published email, and checks every rule first.', null, ['leads', 'Leads']), f.el);
     return;
   }
-  const { lead: l, sent, queued, project, client } = await api('admin/leads/' + id);
+  const { lead: l, sent, queued, project, client, replies = [], demos = [] } = await api('admin/leads/' + id);
+  const lf = logReplyForm({ lead_id: id, business: l.name }, { from_email: (l.email.match(/[^\s@<>"'(),;:]+@[^\s@<>"'(),;:]+\.[a-z]{2,}/i) || [''])[0] });
   const statusSel = h('select', { 'aria-label': 'Status', onchange: async e => { if (await act(() => api('admin/leads/' + id, { method: 'PATCH', body: { status: e.target.value } }), e.target.value === 'dnc' ? 'Marked do not contact. Queued emails cancelled.' : 'Status updated')) route(); } }, Object.entries(LEAD).map(([k, v]) => h('option', { value: k, selected: k === l.status }, v[0])));
   const notes = h('textarea', { rows: 4, 'aria-label': 'Notes' }, l.notes); const next = h('input', { value: l.next, 'aria-label': 'Next step' });
   const del = confirmBox('Delete this lead and its email history for good? Do this if they ask you to erase their data.', 'Delete lead', async () => { if (await act(() => api('admin/leads/' + id, { method: 'DELETE' }), 'Lead deleted')) go('leads'); });
@@ -360,6 +503,9 @@ async function showLead(id) {
     pageHead([l.type, l.area].filter(Boolean).join(' · ') || 'Lead', l.name, null, [tag(LEAD, l.status), l.fit ? fitDots(l.fit) : null], ['leads', 'Leads']),
     h('div', { class: 'grid side-r' },
       h('div', { class: 'grid' },
+        card('Replies', [replies.length ? h('div', { class: 'replies' }, replies.map(replyCard)) : h('p', { class: 'muted small' }, 'No reply yet.'),
+          demos.length ? h('div', { class: 'actions' }, demos.map(d => h('a', { class: 'btn btn-sm', href: '#demo/' + d.id }, icon('demos'), 'Demo sent ' + (d.sent_at ? day(d.sent_at) : '')))) : null,
+          h('div', { class: 'actions' }, h('button', { class: 'btn btn-sm', onclick: () => { lf.el.hidden = false; lf.els.body.focus(); } }, icon('plus'), 'Log a reply by hand')), lf.el]),
         l.pitch ? card('Pitch', h('p', { class: 'prose' }, l.pitch)) : null,
         card('Notes and next step', [h('div', { class: 'field' }, h('label', {}, 'Next step'), next), h('div', { class: 'field' }, h('label', {}, 'Notes'), notes), h('div', { class: 'actions' }, h('button', { class: 'btn btn-sm', onclick: () => act(() => api('admin/leads/' + id, { method: 'PATCH', body: { notes: notes.value, next: next.value } }), 'Saved') }, 'Save'))]),
         card('Emails', [

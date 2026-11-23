@@ -21,7 +21,7 @@
     if (!$('l-user').value.trim() || !$('l-pass').value) return err(box, 'Enter your username and password.');
     btn.disabled = true; btn.textContent = 'Checking…';
     try {
-      var r = await post('/api/login', { username: $('l-user').value, password: $('l-pass').value });
+      var r = await post('/api/login', { username: $('l-user').value, password: $('l-pass').value, remember: $('l-remember').checked });
       if (r.ok) { location.href = '/admin/app'; return; }
       if (r.data.setup) return show('setup');
       err(box, r.data.error || 'Could not log in. Please try again.');

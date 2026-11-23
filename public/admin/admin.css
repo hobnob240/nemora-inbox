@@ -481,3 +481,59 @@ button.v-bubble{pointer-events:auto;border:0;cursor:pointer;touch-action:manipul
 .play-card h2{margin:0 0 2px;color:#fbf3df}
 .play-card .muted{color:#d9ccb0}
 .play-card .btn{min-width:120px;font-size:1.05rem}
+
+/* ---------- outreach: leads / demos / replies ---------- */
+.seg{display:flex;gap:4px;padding:4px;background:var(--plain-bg);border-radius:14px;width:max-content;max-width:100%;overflow-x:auto;scrollbar-width:none}
+.seg::-webkit-scrollbar{display:none}
+.seg a{display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:0 16px;border-radius:10px;color:var(--ink-2);font-weight:600;font-size:.92rem;text-decoration:none;white-space:nowrap;transition:background-color .15s ease,color .15s ease}
+.seg a.on{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+.seg .n{font-size:.72rem;font-weight:700;padding:1px 7px;border-radius:999px;background:var(--line-2);color:var(--ink-2)}
+.seg .n.hot{background:var(--gold);color:#1a1408}
+@media (hover:hover){.seg a:not(.on):hover{color:var(--ink)}}
+@media (max-width:520px){.seg{width:100%}.seg a{flex:1;justify-content:center;padding:0 10px}}
+.tile-btn{font:inherit;text-align:left;cursor:pointer;width:100%;transition:border-color .15s ease,transform .12s ease}
+.tile-btn:active{transform:scale(.98)}
+.tile-btn.on{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold) inset,var(--shadow)}
+.tile-btn.hero.on{box-shadow:0 0 0 2px var(--gold) inset}
+@media (hover:hover){.tile-btn:hover,a.tile:hover{border-color:var(--ink-2)}}
+a.tile{transition:border-color .15s ease}
+.tile-btn:focus-visible,a.tile:focus-visible,.seg a:focus-visible,.demo-main:focus-visible,.demo-hero:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+
+.demo-grid{display:grid;gap:12px}
+@media (min-width:640px){.demo-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (min-width:1280px){.demo-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.demo{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);display:grid;grid-template-rows:1fr auto;min-width:0;overflow:hidden}
+.demo.has-new{border-color:var(--gold)}
+.demo-main{display:grid;gap:6px;align-content:start;padding:16px 16px 12px;color:inherit;text-decoration:none;min-width:0}
+.demo-top{display:flex;gap:6px;flex-wrap:wrap}
+.demo-name{font:500 1.3rem/1.2 var(--serif);overflow-wrap:anywhere;margin-top:4px}
+.demo-meta{color:var(--muted);font-size:.86rem}
+.demo-idea{color:var(--ink-2);font-size:.88rem;line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.demo-when{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:.8rem;margin-top:4px}
+.demo-when svg{width:14px;height:14px;flex-shrink:0}
+.demo-actions{display:flex;gap:8px;flex-wrap:wrap;padding:12px 16px;border-top:1px solid var(--line-2);background:var(--surface-2)}
+@media (hover:hover){.demo-main:hover .demo-name{color:var(--gold-ink)}}
+.demo-hero{display:grid;gap:4px;padding:18px 20px;border-radius:var(--radius);background:var(--chrome);color:var(--on-chrome);text-decoration:none;min-width:0}
+.demo-hero-k{font-size:.75rem;color:var(--on-chrome-muted);font-weight:600}
+.demo-hero strong{font:500 1.2rem/1.3 var(--serif);color:var(--gold-2);overflow-wrap:anywhere}
+.demo-hero-go{display:inline-flex;align-items:center;gap:6px;font-weight:600;font-size:.9rem;margin-top:6px}
+.demo-hero-go svg{width:16px;height:16px}
+
+.replies{display:grid;gap:12px}
+.reply{display:grid;gap:8px;padding:14px;border:1px solid var(--line-2);border-radius:14px;min-width:0}
+.reply.is-new{border-color:var(--gold);background:var(--gold-wash)}
+.reply .quote{background:var(--surface)}
+.reply-top{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;min-width:0}
+.reply-top strong{overflow-wrap:anywhere}
+.reply-top .grow{flex:1}
+
+/* builder list: title, status and time wrap cleanly on a phone */
+.list.card > .item .item-top{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;min-width:0}
+.list.card > .item .item-top strong{overflow-wrap:anywhere}
+
+/* login: keep me logged in */
+.remember{display:flex;gap:10px;align-items:flex-start;font-size:.9rem;cursor:pointer;padding:4px 0}
+.remember input{width:20px;height:20px;min-height:0;margin:2px 0 0;padding:0;border:0;background:none;box-shadow:none;flex-shrink:0;accent-color:var(--gold)}
+.remember .hint{display:block;color:var(--muted);font-size:.8rem;margin-top:2px}
+@media (prefers-reduced-motion:reduce){.tile-btn,.seg a{transition:none}.tile-btn:active{transform:none}}
+.remember input:focus-visible{outline:2px solid var(--gold);outline-offset:2px;box-shadow:none}

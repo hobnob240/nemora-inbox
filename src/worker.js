@@ -25,6 +25,7 @@ import { adminBuilds, publicBuild } from './builds.js';
 import { publicShop } from './shop.js';
 
 const SESSION_TTL = 8 * 60 * 60;
+const REMEMBER_TTL = 30 * 24 * 60 * 60;  // opt-in 'keep me logged in' on a personal phone
 const COOKIE = '__Host-nemora_admin';
 const MAX_FAILS = 5, LOCK_SECONDS = 15 * 60;
 const KEEP_LOG = 200;
@@ -450,12 +451,12 @@ async function setup(req, env, url) {
 }
 
 const generation = async env => parseInt(await env.KV.get('auth:gen'), 10) || 0;
-async function newSession(env, user, role = 'owner', member = null) {
-  const id = randomHex(32), exp = Date.now() + SESSION_TTL * 1000, gen = await generation(env);
+async function newSession(env, user, role = 'owner', member = null, ttl = SESSION_TTL) {
+  const id = randomHex(32), exp = Date.now() + ttl * 1000, gen = await generation(env);
   const sess = { u: user, exp, gen, role };
   if (member) { sess.ug = member.gen || 0; sess.name = member.name || ''; }
-  await env.KV.put('sess:' + await sha256hex(id), JSON.stringify(sess), { expirationTtl: SESSION_TTL });
-  return `${COOKIE}=${id}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${SESSION_TTL}`;
+  await env.KV.put('sess:' + await sha256hex(id), JSON.stringify(sess), { expirationTtl: ttl });
+  return `${COOKIE}=${id}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${ttl}`;
 }
 async function bumpGeneration(env, user) {
   await env.KV.put('auth:gen', String((await generation(env)) + 1));
@@ -481,8 +482,9 @@ async function login(req, env, url) {
     return left > 0 ? json({ error: `Wrong username or password. ${left} attempt${left === 1 ? '' : 's'} left.` }, 401) : json({ error: 'Too many attempts. Please wait 15 minutes and try again.' }, 429);
   }
   await env.KV.delete(rl.key);
-  await log(env, req, member ? member.user : creds.user, 'Logged in');
-  return json({ ok: true }, 200, { 'Set-Cookie': member ? await newSession(env, member.user, 'member', member) : await newSession(env, creds.user) });
+  const ttl = body.remember === true ? REMEMBER_TTL : SESSION_TTL;
+  await log(env, req, member ? member.user : creds.user, ttl === REMEMBER_TTL ? 'Logged in (kept logged in for 30 days on this device)' : 'Logged in');
+  return json({ ok: true }, 200, { 'Set-Cookie': member ? await newSession(env, member.user, 'member', member, ttl) : await newSession(env, creds.user, 'owner', null, ttl) });
 }
 async function logout(req, env, url) {
   if (!sameOrigin(req, url)) return json({ error: 'Request blocked for security reasons.' }, 403);

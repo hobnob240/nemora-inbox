@@ -11,8 +11,8 @@
 <link rel="apple-touch-icon" href="/assets/app-180.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="NEMORA">
-<link rel="stylesheet" href="/admin/admin.css?v=4">
-<script src="/admin/login.js?v=1" defer></script>
+<link rel="stylesheet" href="/admin/admin.css?v=5">
+<script src="/admin/login.js?v=2" defer></script>
 </head>
 <body class="auth-body">
 <div class="auth">
@@ -25,6 +25,7 @@
       <div id="login-msg" class="msg err" role="alert" hidden></div>
       <div class="field"><label for="l-user">Username</label><input id="l-user" name="username" autocomplete="username" autocapitalize="none" spellcheck="false" required></div>
       <div class="field"><label for="l-pass">Password</label><div class="pw-wrap"><input id="l-pass" name="password" type="password" autocomplete="current-password" required><button type="button" data-show="l-pass">Show</button></div></div>
+      <label class="remember"><input type="checkbox" id="l-remember"><span>Keep me logged in on this device for 30 days<span class="hint">Only tick this on your own phone or laptop.</span></span></label>
       <button class="btn btn-gold" type="submit">Log in</button>
     </form>
 
