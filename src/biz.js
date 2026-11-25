@@ -7,6 +7,7 @@ import { adminGame } from './game.js';
 import { adminSocial, SOCIAL_SCHEMA } from './social.js';
 import { adminAgents, agentAlerts, adminVillage } from './agents.js';
 import { adminDemos, DEMO_SCHEMA } from './demos.js';
+import { adminMyList, MYLIST_SCHEMA } from './mylist.js';
 
 export const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS leads (id TEXT PRIMARY KEY, name TEXT NOT NULL, type TEXT NOT NULL DEFAULT '', area TEXT NOT NULL DEFAULT '', country TEXT NOT NULL DEFAULT 'UK', status TEXT NOT NULL DEFAULT 'check', channel TEXT NOT NULL DEFAULT '', legal TEXT NOT NULL DEFAULT '', email TEXT NOT NULL DEFAULT '', phone TEXT NOT NULL DEFAULT '', website TEXT NOT NULL DEFAULT '', address TEXT NOT NULL DEFAULT '', socials TEXT NOT NULL DEFAULT '', reviews INTEGER NOT NULL DEFAULT 0, fit INTEGER NOT NULL DEFAULT 0, package TEXT NOT NULL DEFAULT '', pitch TEXT NOT NULL DEFAULT '', notes TEXT NOT NULL DEFAULT '', next TEXT NOT NULL DEFAULT '', source TEXT NOT NULL DEFAULT '', found TEXT NOT NULL DEFAULT '', vetted TEXT NOT NULL DEFAULT '', updated TEXT NOT NULL DEFAULT '')`,
@@ -28,7 +29,8 @@ export const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS worklog (id INTEGER PRIMARY KEY AUTOINCREMENT, site_id TEXT NOT NULL, day TEXT NOT NULL, minutes INTEGER NOT NULL DEFAULT 0, kind TEXT NOT NULL DEFAULT 'change', what TEXT NOT NULL DEFAULT '', created TEXT NOT NULL DEFAULT '')`,
   `CREATE INDEX IF NOT EXISTS worklog_site ON worklog(site_id, day)`,
   ...SOCIAL_SCHEMA,
-  ...DEMO_SCHEMA
+  ...DEMO_SCHEMA,
+  ...MYLIST_SCHEMA
 ];
 let ready = false;
 export async function ensureBizSchema(env) {
@@ -113,7 +115,7 @@ const plusDays = (iso, n) => { const d = new Date(iso + 'T12:00:00Z'); d.setUTCD
 // returns a Response, or null if the path isn't a business route
 export async function adminBiz(req, env, path, m, readJson, log, user, extra, role = 'owner') {
   const parts = path.split('/'), [res, id, sub] = parts;
-  if (!['dashboard', 'leads', 'outbox', 'clients', 'projects', 'invoices', 'reports', 'settings', 'rulebook', 'sites', 'worklog', 'cf', 'social', 'agents', 'village', 'game', 'demos', 'replies'].includes(res)) return null;
+  if (!['dashboard', 'leads', 'outbox', 'clients', 'projects', 'invoices', 'reports', 'settings', 'rulebook', 'sites', 'worklog', 'cf', 'social', 'agents', 'village', 'game', 'demos', 'replies', 'mylist'].includes(res)) return null;
   if (!env.DB) return reply({ error: 'The database is not connected. Add the D1 binding called DB in Cloudflare.' }, 503);
   await ensureBizSchema(env);
   try {
@@ -121,6 +123,7 @@ export async function adminBiz(req, env, path, m, readJson, log, user, extra, ro
     if (res === 'dashboard' && m === 'GET') return reply(await dashboard(env, { ...extra, role }));
     if (res === 'leads') return await leads(env, id, sub, m, body, log, user);
     if (res === 'demos' || res === 'replies') return await adminDemos(env, res, id, sub, m, body, log);
+    if (res === 'mylist') return await adminMyList(env, id, m, body, log);
     if (res === 'outbox' && id && m === 'DELETE') {
       const o = await first(env, 'SELECT business FROM outbox WHERE id = ?', id); if (!o) return reply({ error: 'That queued email has already gone or been removed.' }, 404);
       await run(env, 'DELETE FROM outbox WHERE id = ?', id); await log('Cancelled a queued email to ' + o.business.slice(0, 40)); return reply({ ok: true });
@@ -263,7 +266,7 @@ async function leads(env, id, sub, m, body, log) {
   }
   if (m === 'DELETE') {
     // erase a lead completely (e.g. a data-deletion request)
-    await env.DB.batch([env.DB.prepare('DELETE FROM outbox WHERE lead_id = ?').bind(id), env.DB.prepare('DELETE FROM sendlog WHERE lead_id = ?').bind(id), env.DB.prepare('DELETE FROM replies WHERE lead_id = ?').bind(id), env.DB.prepare("UPDATE demos SET lead_id = '' WHERE lead_id = ?").bind(id), env.DB.prepare('DELETE FROM leads WHERE id = ?').bind(id), env.DB.prepare("UPDATE projects SET lead_id = '' WHERE lead_id = ?").bind(id), env.DB.prepare("UPDATE clients SET lead_id = '' WHERE lead_id = ?").bind(id)]);
+    await env.DB.batch([env.DB.prepare('DELETE FROM outbox WHERE lead_id = ?').bind(id), env.DB.prepare('DELETE FROM sendlog WHERE lead_id = ?').bind(id), env.DB.prepare('DELETE FROM replies WHERE lead_id = ?').bind(id), env.DB.prepare("UPDATE demos SET lead_id = '' WHERE lead_id = ?").bind(id), env.DB.prepare('DELETE FROM leads WHERE id = ?').bind(id), env.DB.prepare("UPDATE projects SET lead_id = '' WHERE lead_id = ?").bind(id), env.DB.prepare("UPDATE clients SET lead_id = '' WHERE lead_id = ?").bind(id), env.DB.prepare("UPDATE mylist SET lead_id = '' WHERE lead_id = ?").bind(id)]);
     await log('Deleted lead ' + lead.name.slice(0, 40)); return reply({ ok: true });
   }
   return reply({ error: 'Not found.' }, 404);

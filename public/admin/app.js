@@ -161,8 +161,8 @@ const NAV = [['home', 'Home'], ['inbox', 'Inbox'], ['leads', 'Leads'], ['sites',
 const SIDE = [['home', 'Home'], ['village', 'Village'], ['agents', 'Agents'], ['inbox', 'Inbox'], ['leads', 'Leads'], ['demos', 'Demos'], ['social', 'Social'], ['sites', 'Sites'], ['builds', 'Builder'], ['work', 'Work'], ['money', 'Money']];
 const NAV_MORE = [['visitors', 'Visitors'], ['settings', 'Settings']];
 const MENU = [['demos', 'Demos'], ['replies', 'Replies'], ['village', 'Village'], ['agents', 'Agents'], ['builds', 'Builder'], ['social', 'Social'], ['visitors', 'Visitors'], ['settings', 'Settings']];
-const SECTION = { village: 'village', play: 'village', builds: 'builds', agents: 'agents', agent: 'agents', social: 'social', post: 'social', sites: 'sites', site: 'sites', inbox: 'inbox', leads: 'leads', lead: 'leads', replies: 'leads', demos: 'demos', demo: 'demos', work: 'work', project: 'work', client: 'work', clients: 'work', money: 'money', invoice: 'money', visitors: 'visitors', settings: 'settings', activity: 'settings', home: 'home' };
-const TITLES = { village: 'Village', builds: 'Builder', agents: 'Agents', social: 'Social', sites: 'Sites', demos: 'Demos', home: 'Home', inbox: 'Inbox', leads: 'Leads', work: 'Work', money: 'Money', visitors: 'Visitors', settings: 'Settings' };
+const SECTION = { village: 'village', play: 'village', builds: 'builds', agents: 'agents', agent: 'agents', social: 'social', post: 'social', sites: 'sites', site: 'sites', inbox: 'inbox', leads: 'leads', lead: 'leads', replies: 'leads', mylist: 'leads', demos: 'demos', demo: 'demos', work: 'work', project: 'work', client: 'work', clients: 'work', money: 'money', invoice: 'money', visitors: 'visitors', settings: 'settings', activity: 'settings', home: 'home' };
+const TITLES = { mylist: 'Your list', village: 'Village', builds: 'Builder', agents: 'Agents', social: 'Social', sites: 'Sites', demos: 'Demos', home: 'Home', inbox: 'Inbox', leads: 'Leads', work: 'Work', money: 'Money', visitors: 'Visitors', settings: 'Settings' };
 let me = { username: '', role: 'owner', name: '', unread: 0 };
 function shell() {
   $('#side-nav').replaceChildren(...SIDE.map(([k, l]) => h('a', { href: '#' + k, 'data-k': k }, icon(k), l, k === 'inbox' ? h('span', { class: 'count', hidden: true }) : null)), h('div', { class: 'sep' }), ...NAV_MORE.map(([k, l]) => h('a', { href: '#' + k, 'data-k': k }, icon(k), l)));
@@ -194,7 +194,7 @@ async function route() {
   render(h('div', { class: 'skeleton' }), h('div', { class: 'skeleton' }));
   const pages = {
     home: showHome, inbox: id ? () => showMessage(id) : showInbox, leads: showLeads, lead: () => showLead(id),
-    demos: showDemos, demo: () => showDemo(id), replies: showReplies,
+    demos: showDemos, demo: () => showDemo(id), replies: showReplies, mylist: showMyList,
     work: () => showWork('projects'), clients: () => showWork('clients'),
     project: () => id === 'new' ? editProject(null, extra) : showProject(id), client: () => id === 'new' ? editClient(null) : showClient(id),
     builds: showBuilds, village: () => showVillage(id), play: () => showVillage(null, true),
@@ -317,11 +317,12 @@ const REPLY = { new: ['New', 'warn'], seen: ['Read', 'info'], done: ['Dealt with
 const hostPath = u => { try { const x = new URL(u); return (x.host + x.pathname).replace(/\/$/, ''); } catch (e) { return u; } };
 // the three outreach views share one switcher so they read as one area
 function outreachTabs(current, counts = {}) {
-  return h('nav', { class: 'seg', 'aria-label': 'Outreach' }, [['leads', 'Leads'], ['demos', 'Demos'], ['replies', 'Replies']].map(([k, l]) =>
-    h('a', { href: '#' + k, class: current === k ? 'on' : '', 'aria-current': current === k ? 'page' : null }, l, counts[k] ? h('span', { class: 'n' + (k === 'replies' ? ' hot' : '') }, num(counts[k])) : null)));
+  return h('nav', { class: 'seg', 'aria-label': 'Outreach' }, [['mylist', 'Your list'], ['leads', 'Leads'], ['demos', 'Demos'], ['replies', 'Replies']].map(([k, l]) =>
+    h('a', { href: '#' + k, class: current === k ? 'on' : '', 'aria-current': current === k ? 'page' : null }, l, counts[k] ? h('span', { class: 'n' + (k === 'replies' || k === 'mylist' ? ' hot' : '') }, num(counts[k])) : null)));
 }
 async function outreachCounts() {
-  try { const d = await api('admin/replies'); return { replies: d.replies.filter(r => r.status === 'new').length }; } catch (e) { return {}; }
+  const [r, l] = await Promise.all([api('admin/replies').catch(() => null), api('admin/mylist').catch(() => null)]);
+  return { replies: r ? r.replies.filter(x => x.status === 'new').length : 0, mylist: l ? l.items.filter(x => x.status === 'todo').length : 0 };
 }
 const replyRow = r => h('a', { class: 'row' + (r.status === 'new' ? ' unread' : ''), href: r.demo_id ? '#demo/' + r.demo_id : r.lead_id ? '#lead/' + r.lead_id : '#replies/' + r.id },
   h('span', { class: 'avatar-sm', 'aria-hidden': 'true' }, initials(r.who || r.from_name || r.from_email)),
@@ -438,6 +439,49 @@ async function showReplies() {
     outreachTabs('replies', { replies: c.new }),
     chipsRow([['new', 'New', c.new], ['all', 'All', c.all]], replyFilter, k => { replyFilter = k; showReplies(); }),
     list.length ? card(null, h('div', { class: 'list' }, list.map(replyRow))) : empty(replyFilter === 'new' ? 'You\'re up to date' : 'No replies yet', replyFilter === 'new' && replies.length ? 'Nothing new. Older replies are under All.' : 'When someone writes back to an outreach email, it shows up here.'));
+}
+
+/* ================= your list: leads Charlie DMs or calls himself ================= */
+const MINE = { todo: ['To do', 'info'], dm_sent: ['DM sent', 'gold'], called: ['Called', 'gold'], replied: ['Replied', 'ok'], not_interested: ['Not interested', ''] };
+const MINE_GROUPS = [['todo', 'To do', x => x.status === 'todo'], ['doing', 'Waiting', x => ['dm_sent', 'called'].includes(x.status)], ['replied', 'Replied', x => x.status === 'replied'], ['no', 'Not interested', x => x.status === 'not_interested'], ['all', 'All', () => true]];
+let mineFilter = 'todo';
+const ukDay = d => d.toLocaleDateString('en-CA', { timeZone: 'Europe/London' });
+function mineCard(x) {
+  const set = async st => { if (await act(() => api('admin/mylist/' + x.id, { method: 'PATCH', body: { status: st } }), MINE[st][0])) showMyList(); };
+  const btn = (st, label, ic) => h('button', { class: 'btn btn-sm' + (x.status === st ? ' btn-gold' : ''), 'aria-pressed': String(x.status === st), onclick: () => set(st) }, ic ? icon(ic) : null, label);
+  const ig = safeHref(x.instagram), fb = safeHref(x.facebook), demo = safeHref(x.demo_url), src = safeHref(x.detail_source), site = safeHref(x.website);
+  const notes = h('textarea', { rows: 2, 'aria-label': 'Notes on ' + x.business, placeholder: 'Notes (what they said, call back when…)' }, x.notes || '');
+  const done = [x.dm_at && 'DM ' + ago(x.dm_at), x.called_at && 'called ' + ago(x.called_at), x.replied_at && 'replied ' + ago(x.replied_at)].filter(Boolean).join(' · ');
+  return h('article', { class: 'mine' + (x.status === 'todo' ? ' is-new' : '') },
+    h('div', { class: 'reply-top' }, h('strong', {}, x.business), h('span', { class: 'grow' }), tag(MINE, x.status)),
+    h('span', { class: 'small muted' }, [x.trade, x.area, x.legal].filter(Boolean).join(' · '), done ? ' · ' + done : ''),
+    x.detail ? h('p', { class: 'small mine-fact' }, h('strong', {}, 'True detail: '), x.detail, src ? [' ', h('a', { href: src, target: '_blank', rel: 'noopener noreferrer' }, '(source)')] : null) : null,
+    h('div', { class: 'actions' },
+      x.phone ? h('a', { class: 'btn btn-sm', href: 'tel:' + x.phone.replace(/[^+0-9]/g, '') }, icon('phone'), x.phone) : null,
+      ig ? h('a', { class: 'btn btn-sm', href: ig, target: '_blank', rel: 'noopener noreferrer' }, 'Instagram') : null,
+      fb ? h('a', { class: 'btn btn-sm', href: fb, target: '_blank', rel: 'noopener noreferrer' }, 'Facebook') : null,
+      site ? h('a', { class: 'btn btn-sm btn-ghost', href: site, target: '_blank', rel: 'noopener noreferrer' }, icon('link'), 'Their site') : null,
+      demo ? h('a', { class: 'btn btn-sm btn-ghost', href: demo, target: '_blank', rel: 'noopener noreferrer' }, icon('demo'), 'Concept demo') : null),
+    x.dm ? h('div', { class: 'quote' }, x.dm) : null,
+    x.dm ? h('div', { class: 'actions' }, h('button', { class: 'btn btn-sm btn-gold', onclick: () => copy(x.dm, 'DM') }, icon('copy'), 'Copy DM')) : null,
+    h('div', { class: 'actions mine-status' }, btn('dm_sent', 'DM sent', 'check'), btn('called', 'Called', 'phone'), btn('replied', 'Replied', 'reply'), btn('not_interested', 'Not interested')),
+    h('details', {}, h('summary', { class: 'small' }, x.notes ? 'Notes' : 'Add a note'), notes,
+      h('div', { class: 'actions' }, h('button', { class: 'btn btn-sm', onclick: () => act(() => api('admin/mylist/' + x.id, { method: 'PATCH', body: { notes: notes.value } }), 'Note saved') }, 'Save note'),
+        x.status !== 'todo' ? h('button', { class: 'btn btn-sm btn-ghost', onclick: () => set('todo') }, 'Back to to do') : null)));
+}
+async function showMyList() {
+  const [{ items }, counts] = await Promise.all([api('admin/mylist'), outreachCounts()]);
+  const today = ukDay(new Date()), g = MINE_GROUPS.find(x => x[0] === mineFilter) || MINE_GROUPS[0];
+  const list = items.filter(g[2]);
+  render(
+    pageHead('Outreach', 'Your list', 'Leads the agent can’t email. DM them from NEMORA’s Instagram or give them a ring, then tap what you did. Check a number isn’t on TPS/CTPS before a sales call.'),
+    outreachTabs('mylist', counts),
+    h('div', { class: 'tiles mine-tiles' },
+      tile('Added today', num(items.filter(x => x.added === today).length)),
+      tile('To do', num(items.filter(x => x.status === 'todo').length)),
+      tile('Replied', num(items.filter(x => x.status === 'replied').length))),
+    chipsRow(MINE_GROUPS.map(([k, l, f]) => [k, l, items.filter(f).length]), mineFilter, k => { mineFilter = k; showMyList(); }),
+    list.length ? h('div', { class: 'mine-list' }, list.map(mineCard)) : empty(items.length ? 'Nothing here' : 'Your list is empty', items.length ? null : 'The outreach agent adds about 25 leads here each weekday: people it can’t email, with a ready-to-send DM.'));
 }
 
 /* ================= leads ================= */
